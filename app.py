@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 import matplotlib.pyplot as plt
+import time
 from textblob import TextBlob
 
 # =====================================================
@@ -24,7 +25,6 @@ if "books" not in st.session_state:
 
 if "selected_book" not in st.session_state:
     st.session_state.selected_book = None
-
 
 # =====================================================
 # CUSTOM CSS
@@ -124,7 +124,7 @@ hr {
 
 
 # =====================================================
-# SIDEBAR NAVIGATION
+# SIDEBAR
 # =====================================================
 
 with st.sidebar:
@@ -145,10 +145,10 @@ with st.sidebar:
 
 
 # =====================================================
-# BOOK COLLECTION - OPEN LIBRARY API
+# BOOK COLLECTION FUNCTION
 # =====================================================
 
-def collect_books(max_books=100):
+def collect_books(max_books=2000):
 
     books = []
     seen_books = set()
@@ -163,135 +163,206 @@ def collect_books(max_books=100):
         "romance",
         "education",
         "biography",
-        "computer"
+        "computer science",
+        "art",
+        "literature",
+        "philosophy",
+        "psychology",
+        "medicine",
+        "engineering",
+        "mathematics",
+        "mystery",
+        "adventure",
+        "children",
+        "poetry",
+        "economics",
+        "travel",
+        "environment",
+        "programming",
+        "novel",
+        "music",
+        "religion",
+        "politics",
+        "sports"
     ]
 
-    headers = {
-        "User-Agent": "BookLens/1.0 (Book Analytics Educational Project)"
-    }
+    session = requests.Session()
 
-    for term in search_terms:
+    session.headers.update({
+        "User-Agent": "BookLens/1.0 (Educational Book Analytics Project)"
+    })
+
+    progress = st.progress(0)
+    status = st.empty()
+
+    total_terms = len(search_terms)
+
+    for term_index, term in enumerate(search_terms):
 
         if len(books) >= max_books:
             break
 
-        remaining = max_books - len(books)
+        page_number = 1
 
-        params = {
-            "q": term,
-            "limit": min(100, remaining),
-            "fields": (
-                "key,title,author_name,first_publish_year,"
-                "subject,cover_i,ratings_average,ratings_count,"
-                "edition_count,has_fulltext"
-            )
-        }
+        while len(books) < max_books:
 
-        try:
-
-            response = requests.get(
-                "https://openlibrary.org/search.json",
-                params=params,
-                headers=headers,
-                timeout=30
+            status.info(
+                f"Collecting: {term.title()} | "
+                f"Books collected: {len(books)} / {max_books}"
             )
 
-            response.raise_for_status()
+            params = {
+                "q": term,
+                "page": page_number,
+                "limit": 100,
+                "fields": (
+                    "key,title,author_name,first_publish_year,"
+                    "subject,cover_i,ratings_average,"
+                    "ratings_count,edition_count,has_fulltext"
+                )
+            }
 
-            data = response.json()
+            try:
 
-            items = data.get("docs", [])
+                response = session.get(
+                    "https://openlibrary.org/search.json",
+                    params=params,
+                    timeout=30
+                )
 
-            for item in items:
-
-                book_id = item.get("key", "")
-
-                if not book_id or book_id in seen_books:
+                if response.status_code == 429:
+                    time.sleep(2)
                     continue
 
-                title = item.get(
-                    "title",
-                    "Unknown Title"
-                )
+                response.raise_for_status()
 
-                authors = item.get("author_name", [])
+                data = response.json()
+                items = data.get("docs", [])
 
-                author = (
-                    ", ".join(authors[:3])
-                    if authors
-                    else "Not Available"
-                )
-
-                subjects = item.get("subject", [])
-
-                category = (
-                    ", ".join(subjects[:3])
-                    if subjects
-                    else term.title()
-                )
-
-                year = item.get(
-                    "first_publish_year",
-                    "Not Available"
-                )
-
-                rating = item.get("ratings_average")
-
-                cover_id = item.get("cover_i")
-
-                image = (
-                    f"https://covers.openlibrary.org/b/id/{cover_id}-M.jpg"
-                    if cover_id
-                    else ""
-                )
-
-                description = (
-                    f"{title} by {author}. "
-                    f"First published in {year}. "
-                    f"Category: {category}."
-                )
-
-                book_url = (
-                    "https://openlibrary.org" + book_id
-                )
-
-                books.append({
-
-                    "Book ID": book_id,
-                    "Title": title,
-                    "Author": author,
-                    "Price": None,
-                    "Currency": "",
-                    "Rating": rating,
-                    "Category": category,
-                    "Publication Year": year,
-                    "Availability": (
-                        "Full Text Available"
-                        if item.get("has_fulltext")
-                        else "Catalogued"
-                    ),
-                    "Description": description,
-                    "URL": book_url,
-                    "Image": image
-
-                })
-
-                seen_books.add(book_id)
-
-                if len(books) >= max_books:
+                if not items:
                     break
 
-        except requests.RequestException as e:
+                for item in items:
 
-            st.warning(
-                f"Unable to collect {term} books: {e}"
+                    book_id = item.get("key")
+
+                    if not book_id or book_id in seen_books:
+                        continue
+
+                    title = item.get(
+                        "title",
+                        "Unknown Title"
+                    )
+
+                    authors = item.get("author_name", [])
+
+                    author = (
+                        ", ".join(authors[:3])
+                        if authors
+                        else "Not Available"
+                    )
+
+                    subjects = item.get("subject", [])
+
+                    category = (
+                        ", ".join(subjects[:3])
+                        if subjects
+                        else term.title()
+                    )
+
+                    year = item.get(
+                        "first_publish_year",
+                        None
+                    )
+
+                    rating = item.get(
+                        "ratings_average",
+                        None
+                    )
+
+                    cover_id = item.get("cover_i")
+
+                    image_url = (
+                        f"https://covers.openlibrary.org/b/id/{cover_id}-M.jpg"
+                        if cover_id
+                        else ""
+                    )
+
+                    description = (
+                        f"{title} by {author}. "
+                        f"First published in {year}. "
+                        f"Category: {category}."
+                    )
+
+                    book_url = (
+                        "https://openlibrary.org" + book_id
+                    )
+
+                    books.append({
+
+                        "Book ID": book_id,
+                        "Title": title,
+                        "Author": author,
+                        "Price": None,
+                        "Currency": "",
+                        "Rating": rating,
+                        "Category": category,
+                        "Publication Year": year,
+                        "Availability": (
+                            "Full Text Available"
+                            if item.get("has_fulltext")
+                            else "Catalogued"
+                        ),
+                        "Description": description,
+                        "URL": book_url,
+                        "Image": image_url
+
+                    })
+
+                    seen_books.add(book_id)
+
+                    if len(books) >= max_books:
+                        break
+
+                page_number += 1
+
+                if page_number > 10:
+                    break
+
+                progress.progress(
+                    min(
+                        (term_index + 1) / total_terms,
+                        1.0
+                    )
+                )
+
+                time.sleep(0.15)
+
+            except requests.RequestException as e:
+
+                status.error(
+                    f"Connection issue while collecting {term}: {e}"
+                )
+
+                break
+
+            except (ValueError, TypeError) as e:
+
+                status.error(
+                    f"Unable to process book data: {e}"
+                )
+
+                break
+
+        progress.progress(
+            min(
+                (term_index + 1) / total_terms,
+                1.0
             )
+        )
 
-        except (ValueError, TypeError) as e:
-
-            st.warning(
-                f"Unable to process {term} book data: {e}"
-            )
+    progress.empty()
+    status.empty()
 
     df = pd.DataFrame(books)
 
@@ -307,7 +378,7 @@ def collect_books(max_books=100):
 
 
 # =====================================================
-# HELPER FUNCTION
+# HELPER FUNCTIONS
 # =====================================================
 
 def safe_number(value):
@@ -315,9 +386,26 @@ def safe_number(value):
     try:
         if pd.isna(value):
             return None
+
         return float(value)
+
     except (ValueError, TypeError):
         return None
+
+
+def show_price(price, currency):
+
+    number = safe_number(price)
+
+    if number is None:
+        return "Price Not Available"
+
+    currency = str(currency).strip()
+
+    if currency:
+        return f"{currency} {number:,.2f}"
+
+    return f"{number:,.2f}"
 
 
 # =====================================================
@@ -344,8 +432,7 @@ if page == "🏠 Home":
     st.markdown("## 🌐 Book Collection")
 
     st.write(
-        "Discover and collect books from different categories "
-        "around the world."
+        "Collect books from different categories around the world."
     )
 
     col1, col2 = st.columns([2, 1])
@@ -353,8 +440,9 @@ if page == "🏠 Home":
     with col1:
 
         number_of_books = st.selectbox(
-            "Select number of books",
-            [20, 50, 100, 200]
+            "Select Number of Books",
+            [100, 200, 500, 1000, 1500, 2000],
+            index=5
         )
 
     with col2:
@@ -370,7 +458,7 @@ if page == "🏠 Home":
     if collect_button:
 
         with st.spinner(
-            "Collecting books from Open Library..."
+            "Collecting books. Please wait..."
         ):
 
             result = collect_books(number_of_books)
@@ -378,8 +466,7 @@ if page == "🏠 Home":
             if result.empty:
 
                 st.error(
-                    "Books could not be collected. "
-                    "Please check your internet connection "
+                    "No books collected. Check your internet connection "
                     "and try again."
                 )
 
@@ -389,8 +476,16 @@ if page == "🏠 Home":
                 st.session_state.selected_book = None
 
                 st.success(
-                    f"{len(result)} books collected successfully!"
+                    f"Successfully collected {len(result)} books!"
                 )
+
+                if len(result) < number_of_books:
+
+                    st.warning(
+                        f"The API returned {len(result)} unique books "
+                        f"instead of {number_of_books}. "
+                        "The available search results may be limited."
+                    )
 
     # =================================================
     # CSV UPLOAD
@@ -414,7 +509,7 @@ if page == "🏠 Home":
                 st.session_state.selected_book = None
 
                 st.success(
-                    "CSV uploaded successfully!"
+                    f"{len(uploaded_df)} records uploaded successfully!"
                 )
 
             except Exception as e:
@@ -439,7 +534,7 @@ if page == "🏠 Home":
         )
 
         search = st.text_input(
-            "🔎 Search by book title or author"
+            "🔎 Search by Book Title or Author"
         )
 
         filtered = books.copy()
@@ -468,21 +563,8 @@ if page == "🏠 Home":
                 title_match | author_match
             ]
 
-        if "Price" in filtered.columns:
-
-            filtered["Price"] = pd.to_numeric(
-                filtered["Price"],
-                errors="coerce"
-            )
-
-            filtered = filtered.sort_values(
-                by="Price",
-                ascending=False,
-                na_position="last"
-            )
-
         st.caption(
-            "Explore books and open individual book details."
+            f"Showing {len(filtered)} matching books."
         )
 
         for index, book in filtered.iterrows():
@@ -497,71 +579,56 @@ if page == "🏠 Home":
                 "Not Available"
             )
 
-            price = safe_number(
-                book.get("Price")
-            )
-
-            currency = book.get(
-                "Currency",
-                ""
-            )
-
             rating = book.get(
                 "Rating",
                 "Not Available"
             )
 
-            st.markdown(
-                '<div class="book-card">',
-                unsafe_allow_html=True
-            )
+            price = book.get("Price")
+            currency = book.get("Currency", "")
 
-            col1, col2 = st.columns([4, 1])
-
-            with col1:
+            with st.container():
 
                 st.markdown(
-                    f"### 📘 {title}"
+                    '<div class="book-card">',
+                    unsafe_allow_html=True
                 )
 
-                st.write(
-                    f"✍️ Author: {author}"
-                )
+                col1, col2 = st.columns([4, 1])
 
-                if price is not None:
+                with col1:
+
+                    st.markdown(
+                        f"### 📘 {title}"
+                    )
 
                     st.write(
-                        f"💰 Price: {currency} {price:,.2f}"
+                        f"✍️ Author: {author}"
                     )
-
-                else:
 
                     st.write(
-                        "💰 Price: Not Available"
+                        f"💰 Price: {show_price(price, currency)}"
                     )
 
-                st.write(
-                    f"⭐ Rating: {rating}"
+                    st.write(
+                        f"⭐ Rating: {rating}"
+                    )
+
+                with col2:
+
+                    st.write("")
+
+                    if st.button(
+                        "View Details",
+                        key=f"details_{index}"
+                    ):
+
+                        st.session_state.selected_book = index
+
+                st.markdown(
+                    "</div>",
+                    unsafe_allow_html=True
                 )
-
-            with col2:
-
-                st.write("")
-
-                if st.button(
-                    "View Details",
-                    key=f"details_{index}"
-                ):
-
-                    st.session_state.selected_book = book.get(
-                        "Book ID",
-                        index
-                    )
-
-            st.markdown(
-                "</div>",
-                unsafe_allow_html=True
-            )
 
         # =================================================
         # BOOK DETAILS
@@ -569,88 +636,67 @@ if page == "🏠 Home":
 
         selected = st.session_state.selected_book
 
-        if selected is not None:
+        if selected is not None and selected in books.index:
 
-            selected_rows = books[
-                books.get(
-                    "Book ID",
-                    pd.Series(index=books.index, dtype=str)
-                ).astype(str) == str(selected)
-            ] if "Book ID" in books.columns else pd.DataFrame()
+            book = books.loc[selected]
 
-            if not selected_rows.empty:
+            st.markdown("---")
+            st.markdown("## 📚 Book Details")
 
-                book = selected_rows.iloc[0]
+            st.markdown(
+                f"### {book.get('Title', 'Unknown Title')}"
+            )
 
-                st.markdown("---")
-                st.markdown("## 📚 Book Details")
+            image_url = book.get("Image", "")
 
-                st.markdown(
-                    f"### {book.get('Title', 'Unknown Title')}"
+            if isinstance(image_url, str) and image_url:
+
+                st.image(
+                    image_url,
+                    width=180
                 )
 
-                image = book.get("Image", "")
+            st.write(
+                f"**Author:** {book.get('Author', 'Not Available')}"
+            )
 
-                if isinstance(image, str) and image:
+            st.write(
+                f"**Price:** {show_price(book.get('Price'), book.get('Currency', ''))}"
+            )
 
-                    st.image(
-                        image,
-                        width=180
-                    )
+            st.write(
+                f"**Rating:** {book.get('Rating', 'Not Available')}"
+            )
 
-                st.write(
-                    f"**Author:** {book.get('Author', 'Not Available')}"
+            st.write(
+                f"**Category:** {book.get('Category', 'Not Available')}"
+            )
+
+            st.write(
+                f"**Publication Year:** {book.get('Publication Year', 'Not Available')}"
+            )
+
+            st.write(
+                f"**Availability:** {book.get('Availability', 'Not Available')}"
+            )
+
+            st.markdown("### Description")
+
+            st.write(
+                book.get(
+                    "Description",
+                    "Description not available."
                 )
+            )
 
-                price = safe_number(
-                    book.get("Price")
+            book_url = book.get("URL", "")
+
+            if isinstance(book_url, str) and book_url:
+
+                st.link_button(
+                    "View Book Information",
+                    book_url
                 )
-
-                if price is not None:
-
-                    st.write(
-                        f"**Price:** {book.get('Currency', '')} {price:,.2f}"
-                    )
-
-                else:
-
-                    st.write(
-                        "**Price:** Not Available"
-                    )
-
-                st.write(
-                    f"**Rating:** {book.get('Rating', 'Not Available')}"
-                )
-
-                st.write(
-                    f"**Category:** {book.get('Category', 'Not Available')}"
-                )
-
-                st.write(
-                    f"**Publication Year:** {book.get('Publication Year', 'Not Available')}"
-                )
-
-                st.write(
-                    f"**Availability:** {book.get('Availability', 'Not Available')}"
-                )
-
-                st.markdown("### Description")
-
-                st.write(
-                    book.get(
-                        "Description",
-                        "Description not available."
-                    )
-                )
-
-                book_url = book.get("URL", "")
-
-                if isinstance(book_url, str) and book_url:
-
-                    st.link_button(
-                        "View Book Information",
-                        book_url
-                    )
 
     else:
 
@@ -743,68 +789,56 @@ if page == "🏠 Home":
 
     if not books.empty:
 
-        # RATING DISTRIBUTION
-
         if "Rating" in books.columns:
 
-            rating_data = pd.to_numeric(
+            ratings = pd.to_numeric(
                 books["Rating"],
                 errors="coerce"
             ).dropna()
 
-            if not rating_data.empty:
+            if not ratings.empty:
 
                 fig, ax = plt.subplots(figsize=(9, 4))
 
                 ax.hist(
-                    rating_data,
+                    ratings,
                     bins=10,
                     edgecolor="white"
                 )
 
-                ax.set_title(
-                    "Book Rating Distribution"
-                )
-
+                ax.set_title("Book Rating Distribution")
                 ax.set_xlabel("Rating")
                 ax.set_ylabel("Number of Books")
 
                 st.pyplot(fig)
                 plt.close(fig)
 
-        # CATEGORY ANALYSIS
-
         if "Category" in books.columns:
 
-            category_data = books[
-                "Category"
-            ].fillna("Unknown").value_counts().head(10)
+            categories = (
+                books["Category"]
+                .fillna("Unknown")
+                .value_counts()
+                .head(10)
+            )
 
-            if not category_data.empty:
+            if not categories.empty:
 
                 fig, ax = plt.subplots(figsize=(9, 5))
 
-                category_data.plot(
+                categories.plot(
                     kind="bar",
                     ax=ax
                 )
 
-                ax.set_title(
-                    "Top Book Categories"
-                )
-
+                ax.set_title("Top Book Categories")
                 ax.set_xlabel("Category")
                 ax.set_ylabel("Number of Books")
 
-                plt.xticks(
-                    rotation=35,
-                    ha="right"
-                )
+                plt.xticks(rotation=35, ha="right")
 
                 st.pyplot(fig)
                 plt.close(fig)
-
-        # PUBLICATION YEAR
 
         if "Publication Year" in books.columns:
 
@@ -823,10 +857,7 @@ if page == "🏠 Home":
                     edgecolor="white"
                 )
 
-                ax.set_title(
-                    "Book Publication Year Distribution"
-                )
-
+                ax.set_title("Publication Year Distribution")
                 ax.set_xlabel("Publication Year")
                 ax.set_ylabel("Number of Books")
 
@@ -903,10 +934,7 @@ if page == "🏠 Home":
             ax=ax
         )
 
-        ax.set_title(
-            "Book Description Sentiment"
-        )
-
+        ax.set_title("Book Description Sentiment")
         ax.set_xlabel("Sentiment")
         ax.set_ylabel("Number of Books")
 
@@ -927,7 +955,7 @@ if page == "🏠 Home":
 
 
 # =====================================================
-# DASHBOARD PAGE
+# DASHBOARD
 # =====================================================
 
 elif page == "📊 Dashboard":
@@ -951,27 +979,29 @@ elif page == "📊 Dashboard":
 
         total_books = len(books)
 
-        ratings = pd.to_numeric(
-            books["Rating"],
-            errors="coerce"
-        ).dropna() if "Rating" in books.columns else pd.Series(dtype=float)
+        ratings = (
+            pd.to_numeric(
+                books["Rating"],
+                errors="coerce"
+            ).dropna()
+            if "Rating" in books.columns
+            else pd.Series(dtype=float)
+        )
+
+        prices = (
+            pd.to_numeric(
+                books["Price"],
+                errors="coerce"
+            ).dropna()
+            if "Price" in books.columns
+            else pd.Series(dtype=float)
+        )
 
         average_rating = (
             ratings.mean()
             if not ratings.empty
             else None
         )
-
-        if "Price" in books.columns:
-
-            prices = pd.to_numeric(
-                books["Price"],
-                errors="coerce"
-            ).dropna()
-
-        else:
-
-            prices = pd.Series(dtype=float)
 
         c1, c2, c3, c4 = st.columns(4)
 
@@ -989,6 +1019,18 @@ elif page == "📊 Dashboard":
 
         with c2:
 
+            st.markdown(
+                f"""
+                <div class="metric-card">
+                    <p>Books With Ratings</p>
+                    <h2>{len(ratings)}</h2>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        with c3:
+
             rating_text = (
                 f"{average_rating:.1f}"
                 if average_rating is not None
@@ -1000,18 +1042,6 @@ elif page == "📊 Dashboard":
                 <div class="metric-card">
                     <p>Average Rating</p>
                     <h2>{rating_text}</h2>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
-        with c3:
-
-            st.markdown(
-                f"""
-                <div class="metric-card">
-                    <p>Books With Ratings</p>
-                    <h2>{len(ratings)}</h2>
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -1032,8 +1062,6 @@ elif page == "📊 Dashboard":
         st.markdown("---")
         st.markdown("## 📈 Dashboard Analytics")
 
-        # RATING DISTRIBUTION
-
         if not ratings.empty:
 
             fig, ax = plt.subplots(figsize=(9, 4))
@@ -1044,23 +1072,21 @@ elif page == "📊 Dashboard":
                 edgecolor="white"
             )
 
-            ax.set_title(
-                "Book Rating Distribution"
-            )
-
+            ax.set_title("Rating Distribution")
             ax.set_xlabel("Rating")
             ax.set_ylabel("Books")
 
             st.pyplot(fig)
             plt.close(fig)
 
-        # CATEGORY DISTRIBUTION
-
         if "Category" in books.columns:
 
-            category_data = books[
-                "Category"
-            ].fillna("Unknown").value_counts().head(10)
+            category_data = (
+                books["Category"]
+                .fillna("Unknown")
+                .value_counts()
+                .head(10)
+            )
 
             if not category_data.empty:
 
@@ -1071,22 +1097,14 @@ elif page == "📊 Dashboard":
                     ax=ax
                 )
 
-                ax.set_title(
-                    "Top Book Categories"
-                )
-
+                ax.set_title("Top Book Categories")
                 ax.set_xlabel("Category")
                 ax.set_ylabel("Books")
 
-                plt.xticks(
-                    rotation=35,
-                    ha="right"
-                )
+                plt.xticks(rotation=35, ha="right")
 
                 st.pyplot(fig)
                 plt.close(fig)
-
-        # PUBLICATION YEAR
 
         if "Publication Year" in books.columns:
 
@@ -1105,17 +1123,12 @@ elif page == "📊 Dashboard":
                     edgecolor="white"
                 )
 
-                ax.set_title(
-                    "Publication Year Distribution"
-                )
-
+                ax.set_title("Publication Year Distribution")
                 ax.set_xlabel("Year")
                 ax.set_ylabel("Books")
 
                 st.pyplot(fig)
                 plt.close(fig)
-
-        # COMPLETE DATASET
 
         st.markdown("---")
         st.markdown("## 📚 Complete Book Dataset")
