@@ -3,11 +3,20 @@ import pandas as pd
 import requests
 import matplotlib.pyplot as plt
 import seaborn as sns
+
 from bs4 import BeautifulSoup
-from textblob import TextBlob
 from urllib.parse import urljoin
 
-# ---------------- PAGE CONFIG ----------------
+try:
+    from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+    VADER_AVAILABLE = True
+except ImportError:
+    VADER_AVAILABLE = False
+
+
+# =====================================================
+# PAGE CONFIG
+# =====================================================
 
 st.set_page_config(
     page_title="BookLens | Book Analytics",
@@ -16,10 +25,14 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ---------------- CUSTOM CSS ----------------
+
+# =====================================================
+# CUSTOM CSS
+# =====================================================
 
 st.markdown("""
 <style>
+
 .stApp {
     background: linear-gradient(135deg, #080d20, #11152e, #21133d);
     color: white;
@@ -51,7 +64,7 @@ p, label {
 }
 
 .hero h1 {
-    font-size: 48px;
+    font-size: 46px;
 }
 
 .hero p {
@@ -62,7 +75,7 @@ p, label {
 .card {
     background: linear-gradient(135deg, #1c2345, #302052);
     border: 1px solid #59418b;
-    padding: 25px;
+    padding: 23px;
     border-radius: 18px;
     text-align: center;
     margin-bottom: 15px;
@@ -70,20 +83,20 @@ p, label {
 
 .card h3 {
     color: #c4b5fd !important;
-    font-size: 17px;
+    font-size: 16px;
 }
 
 .card h1 {
-    font-size: 35px;
+    font-size: 32px;
 }
 
 .section {
     background: #171d38;
-    padding: 22px;
+    padding: 25px;
     border-radius: 15px;
     border: 1px solid #38345f;
-    margin-bottom: 12px;
-    min-height: 115px;
+    margin-bottom: 15px;
+    min-height: 125px;
 }
 
 .book-title {
@@ -127,11 +140,19 @@ p, label {
     border-top: 1px solid #38345f;
     margin-top: 50px;
 }
+
+div[data-testid="stDataFrame"] {
+    border: 1px solid #493477;
+    border-radius: 12px;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
 
-# ---------------- SESSION STATE ----------------
+# =====================================================
+# SESSION STATE
+# =====================================================
 
 if "books" not in st.session_state:
     st.session_state.books = pd.DataFrame()
@@ -139,20 +160,24 @@ if "books" not in st.session_state:
 if "selected_page" not in st.session_state:
     st.session_state.selected_page = "🏠 Home"
 
+if "sentiment_results" not in st.session_state:
+    st.session_state.sentiment_results = None
 
-# ---------------- NAVIGATION CALLBACK ----------------
 
 def navigate_to(page_name):
     st.session_state.selected_page = page_name
 
 
-# ---------------- SIDEBAR ----------------
+# =====================================================
+# NAVIGATION
+# =====================================================
 
 page_options = [
     "🏠 Home",
+    "📊 Dashboard",
     "🌐 Web Scraping",
     "🔍 Exploratory Data Analysis",
-    "📊 Data Visualization",
+    "📈 Data Visualization",
     "💬 Sentiment Analysis"
 ]
 
@@ -167,10 +192,20 @@ page = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.info("Discover Books • Explore Data • Analyze Insights")
+
+st.sidebar.info(
+    "Discover Books • Explore Data • Analyze Insights"
+)
+
+if not st.session_state.books.empty:
+    st.sidebar.success(
+        f"📚 {len(st.session_state.books)} Books Loaded"
+    )
 
 
-# ---------------- HELPER FUNCTIONS ----------------
+# =====================================================
+# HELPER FUNCTIONS
+# =====================================================
 
 def get_numeric_data(df):
     return df.select_dtypes(include="number")
@@ -193,9 +228,17 @@ def footer():
     <div class="footer">
         <h3>📚 BookLens</h3>
         Book Data Analytics Platform<br>
-        Explore • Analyze • Visualize
+        Discover • Explore • Analyze
     </div>
     """, unsafe_allow_html=True)
+
+
+def safe_numeric(df, column):
+
+    if column in df.columns:
+        return pd.to_numeric(df[column], errors="coerce")
+
+    return pd.Series(dtype="float64")
 
 
 def display_book_cards(df):
@@ -226,14 +269,17 @@ def display_book_cards(df):
                     image_url = book.get("Image", "")
 
                     if pd.notna(image_url) and str(image_url).startswith("http"):
+
                         st.image(
                             image_url,
                             use_container_width=True
                         )
+
                     else:
+
                         st.markdown(
-                            "<div style='height:220px;text-align:center;"
-                            "font-size:70px;padding-top:50px;'>📕</div>",
+                            "<div style='height:180px;text-align:center;"
+                            "font-size:65px;padding-top:45px;'>📕</div>",
                             unsafe_allow_html=True
                         )
 
@@ -244,11 +290,15 @@ def display_book_cards(df):
                         unsafe_allow_html=True
                     )
 
-                    price = book.get("Price", 0)
+                    price = pd.to_numeric(
+                        book.get("Price", 0),
+                        errors="coerce"
+                    )
 
                     if pd.notna(price):
+
                         st.markdown(
-                            f"<div class='book-price'>£{float(price):.2f}</div>",
+                            f"<div class='book-price'>£{price:.2f}</div>",
                             unsafe_allow_html=True
                         )
 
@@ -259,25 +309,55 @@ def display_book_cards(df):
                         unsafe_allow_html=True
                     )
 
-                    availability = book.get(
-                        "Availability",
-                        "Not Available"
+                    st.caption(
+                        f"🟢 {book.get('Availability', 'Unknown')}"
                     )
 
-                    st.caption(f"🟢 {availability}")
 
-
-# ---------------- HOME ----------------
+# =====================================================
+# HOME PAGE
+# =====================================================
 
 if page == "🏠 Home":
 
     st.markdown("""
     <div class="hero">
+
         <h1>📚 Welcome to BookLens</h1>
+
         <p>Discover Books. Explore Data. Understand Insights.</p>
-        <p>A smart platform for collecting, analyzing and visualizing book data.</p>
+
+        <p>
+        A smart platform for collecting, analyzing
+        and visualizing book data.
+        </p>
+
     </div>
     """, unsafe_allow_html=True)
+
+    st.subheader("✨ Explore BookLens")
+
+    st.markdown("""
+    <div class="section">
+
+    <h2>📊 Your Book Analytics Dashboard</h2>
+
+    <p>
+    Get a complete overview of your book collection
+    with interactive charts, statistics and insights.
+    </p>
+
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.button(
+        "🚀 Explore Dashboard",
+        key="home_dashboard",
+        on_click=navigate_to,
+        args=("📊 Dashboard",)
+    )
+
+    st.markdown("---")
 
     st.subheader("✨ Explore Our Features")
 
@@ -288,7 +368,8 @@ if page == "🏠 Home":
         st.markdown("""
         <div class="section">
         <h3>🌐 Web Scraping</h3>
-        Collect book information from online sources.
+        Collect book information and cover images
+        from online sources.
         </div>
         """, unsafe_allow_html=True)
 
@@ -296,14 +377,14 @@ if page == "🏠 Home":
             "Explore Web Scraping →",
             key="web_btn",
             on_click=navigate_to,
-            args=("🌐 Web Scraping",),
-            use_container_width=True
+            args=("🌐 Web Scraping",)
         )
 
         st.markdown("""
         <div class="section">
         <h3>🔍 Exploratory Data Analysis</h3>
-        Understand book data through statistical analysis.
+        Understand your dataset through
+        statistical analysis.
         </div>
         """, unsafe_allow_html=True)
 
@@ -311,16 +392,16 @@ if page == "🏠 Home":
             "Explore EDA →",
             key="eda_btn",
             on_click=navigate_to,
-            args=("🔍 Exploratory Data Analysis",),
-            use_container_width=True
+            args=("🔍 Exploratory Data Analysis",)
         )
 
     with c2:
 
         st.markdown("""
         <div class="section">
-        <h3>📊 Data Visualization</h3>
-        Explore patterns through charts and graphs.
+        <h3>📈 Data Visualization</h3>
+        Discover patterns through interactive
+        charts and graphs.
         </div>
         """, unsafe_allow_html=True)
 
@@ -328,14 +409,14 @@ if page == "🏠 Home":
             "Explore Visualization →",
             key="visual_btn",
             on_click=navigate_to,
-            args=("📊 Data Visualization",),
-            use_container_width=True
+            args=("📈 Data Visualization",)
         )
 
         st.markdown("""
         <div class="section">
         <h3>💬 Sentiment Analysis</h3>
-        Analyze positive, negative and neutral opinions.
+        Analyze positive, negative and neutral
+        opinions using NLP.
         </div>
         """, unsafe_allow_html=True)
 
@@ -343,43 +424,249 @@ if page == "🏠 Home":
             "Explore Sentiment Analysis →",
             key="sentiment_btn",
             on_click=navigate_to,
-            args=("💬 Sentiment Analysis",),
-            use_container_width=True
+            args=("💬 Sentiment Analysis",)
         )
-
-    st.markdown("---")
-    st.subheader("📈 Book Collection Overview")
-
-    if not st.session_state.books.empty:
-
-        df = st.session_state.books
-        numeric = get_numeric_data(df)
-
-        m1, m2, m3 = st.columns(3)
-
-        with m1:
-            metric_card("Total Books", f"{len(df):,}")
-
-        with m2:
-            price = numeric["Price"].mean() if "Price" in numeric else 0
-            metric_card("Average Price", f"£{price:.2f}")
-
-        with m3:
-            rating = numeric["Rating"].mean() if "Rating" in numeric else 0
-            metric_card("Average Rating", f"{rating:.2f}/5")
-
-    else:
-        st.info("Visit Web Scraping or upload a CSV file to explore book data.")
 
     footer()
 
 
-# ---------------- WEB SCRAPING ----------------
+# =====================================================
+# DASHBOARD
+# =====================================================
+
+elif page == "📊 Dashboard":
+
+    st.title("📊 BookLens Dashboard")
+
+    st.write(
+        "Complete overview of your book collection and analytics."
+    )
+
+    if not st.session_state.books.empty:
+
+        df = st.session_state.books.copy()
+
+        price = safe_numeric(df, "Price")
+        rating = safe_numeric(df, "Rating")
+
+        total_books = len(df)
+
+        avg_price = price.mean() if not price.empty else 0
+
+        avg_rating = rating.mean() if not rating.empty else 0
+
+        available = 0
+
+        if "Availability" in df.columns:
+
+            available = df["Availability"].astype(
+                str
+            ).str.contains(
+                "In stock",
+                case=False,
+                na=False
+            ).sum()
+
+        categories = (
+            df["Category"].nunique()
+            if "Category" in df.columns
+            else 0
+        )
+
+        st.markdown("---")
+
+        # METRIC CARDS
+
+        c1, c2, c3, c4 = st.columns(4)
+
+        with c1:
+            metric_card("📚 Total Books", f"{total_books:,}")
+
+        with c2:
+            metric_card("💰 Average Price", f"£{avg_price:.2f}")
+
+        with c3:
+            metric_card("⭐ Average Rating", f"{avg_rating:.2f}/5")
+
+        with c4:
+            metric_card("🟢 Available Books", f"{available:,}")
+
+        st.markdown("---")
+
+        # CHARTS
+
+        st.subheader("📈 Book Analytics")
+
+        left, right = st.columns(2)
+
+        with left:
+
+            st.markdown("### 💰 Price Distribution")
+
+            if price.notna().any():
+
+                fig, ax = plt.subplots(figsize=(8, 4))
+
+                ax.hist(
+                    price.dropna(),
+                    bins=15,
+                    edgecolor="white"
+                )
+
+                ax.set_xlabel("Book Price (£)")
+                ax.set_ylabel("Number of Books")
+                ax.set_title("Price Distribution")
+
+                fig.tight_layout()
+
+                st.pyplot(fig)
+
+                plt.close(fig)
+
+            else:
+
+                st.info("Price data not available.")
+
+        with right:
+
+            st.markdown("### ⭐ Rating Distribution")
+
+            if rating.notna().any():
+
+                fig, ax = plt.subplots(figsize=(8, 4))
+
+                rating.value_counts().sort_index().plot(
+                    kind="bar",
+                    ax=ax
+                )
+
+                ax.set_xlabel("Rating")
+                ax.set_ylabel("Number of Books")
+                ax.set_title("Rating Distribution")
+
+                fig.tight_layout()
+
+                st.pyplot(fig)
+
+                plt.close(fig)
+
+            else:
+
+                st.info("Rating data not available.")
+
+        st.markdown("---")
+
+        # CATEGORY ANALYSIS
+
+        st.subheader("📚 Category Analysis")
+
+        if "Category" in df.columns:
+
+            category_counts = df["Category"].value_counts()
+
+            if not category_counts.empty:
+
+                st.bar_chart(category_counts)
+
+                st.write(
+                    f"Total Categories: {categories}"
+                )
+
+        else:
+
+            st.info(
+                "Category information is not present in this dataset. "
+                "Category analysis will appear when Category data is available."
+            )
+
+        st.markdown("---")
+
+        # PRICE VS RATING
+
+        st.subheader("🔍 Price vs Rating Analysis")
+
+        chart_data = pd.DataFrame({
+            "Price": price,
+            "Rating": rating
+        }).dropna()
+
+        if not chart_data.empty:
+
+            fig, ax = plt.subplots(figsize=(10, 4))
+
+            sns.scatterplot(
+                data=chart_data,
+                x="Price",
+                y="Rating",
+                ax=ax
+            )
+
+            ax.set_title("Book Price vs Rating")
+
+            fig.tight_layout()
+
+            st.pyplot(fig)
+
+            plt.close(fig)
+
+        else:
+
+            st.info("Price and rating data required.")
+
+        st.markdown("---")
+
+        # RECENT BOOKS
+
+        st.subheader("🆕 Recent Book Collection")
+
+        if "Title" in df.columns:
+
+            st.dataframe(
+                df.head(10),
+                use_container_width=True
+            )
+
+        # DOWNLOAD
+
+        st.download_button(
+            "⬇️ Download Dashboard Dataset",
+            df.to_csv(index=False).encode("utf-8-sig"),
+            "booklens_dashboard_data.csv",
+            "text/csv"
+        )
+
+    else:
+
+        st.markdown("""
+        <div class="hero">
+            <h2>📚 Your Dashboard is Waiting!</h2>
+            <p>
+            Start collecting books through Web Scraping
+            or upload your book dataset through EDA.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.button(
+            "🌐 Start Collecting Books",
+            on_click=navigate_to,
+            args=("🌐 Web Scraping",)
+        )
+
+    footer()
+
+
+# =====================================================
+# WEB SCRAPING
+# =====================================================
 
 elif page == "🌐 Web Scraping":
 
     st.title("🌐 Web Scraping")
-    st.write("Collect books with their cover images and details.")
+
+    st.write(
+        "Collect book information, prices, ratings and cover images."
+    )
 
     url = st.text_input(
         "Website URL",
@@ -399,7 +686,7 @@ elif page == "🌐 Web Scraping":
 
         try:
 
-            with st.spinner("Collecting books and cover images..."):
+            with st.spinner("Collecting books..."):
 
                 next_url = url
 
@@ -408,7 +695,9 @@ elif page == "🌐 Web Scraping":
                     response = requests.get(
                         next_url,
                         timeout=20,
-                        headers={"User-Agent": "Mozilla/5.0"}
+                        headers={
+                            "User-Agent": "Mozilla/5.0"
+                        }
                     )
 
                     response.raise_for_status()
@@ -420,18 +709,43 @@ elif page == "🌐 Web Scraping":
 
                     for item in soup.select("article.product_pod"):
 
-                        title = item.h3.a["title"]
+                        title_element = item.select_one("h3 a")
 
-                        price = item.select_one(
-                            ".price_color"
-                        ).get_text(strip=True)
+                        price_element = item.select_one(".price_color")
 
-                        availability = item.select_one(
+                        availability_element = item.select_one(
                             ".availability"
-                        ).get_text(strip=True)
+                        )
 
                         rating_element = item.select_one(
                             "p.star-rating"
+                        )
+
+                        image_element = item.select_one(
+                            "div.image_container img"
+                        )
+
+                        title = (
+                            title_element.get("title", "Unknown")
+                            if title_element else "Unknown"
+                        )
+
+                        price_text = (
+                            price_element.get_text(strip=True)
+                            if price_element else "0"
+                        )
+
+                        price = float(
+                            price_text.replace("£", "").replace("Â", "")
+                        )
+
+                        availability = (
+                            availability_element.get_text(
+                                " ",
+                                strip=True
+                            )
+                            if availability_element
+                            else "Unknown"
                         )
 
                         rating_map = {
@@ -442,31 +756,36 @@ elif page == "🌐 Web Scraping":
                             "Five": 5
                         }
 
-                        rating = rating_map.get(
-                            rating_element["class"][1],
-                            0
-                        )
+                        rating = 0
 
-                        image_element = item.select_one(
-                            "div.image_container img"
-                        )
+                        if rating_element:
+
+                            classes = rating_element.get("class", [])
+
+                            if len(classes) > 1:
+
+                                rating = rating_map.get(
+                                    classes[1],
+                                    0
+                                )
 
                         image_url = ""
 
                         if image_element and image_element.get("src"):
+
                             image_url = urljoin(
                                 next_url,
                                 image_element["src"]
                             )
 
                         books.append({
+
                             "Title": title,
-                            "Price": float(
-                                price.replace("£", "").replace("Â", "")
-                            ),
+                            "Price": price,
                             "Rating": rating,
                             "Availability": availability,
                             "Image": image_url
+
                         })
 
                         if len(books) >= limit:
@@ -475,19 +794,26 @@ elif page == "🌐 Web Scraping":
                     next_button = soup.select_one("li.next a")
 
                     if next_button and len(books) < limit:
+
                         next_url = urljoin(
                             next_url,
                             next_button["href"]
                         )
+
                     else:
+
                         next_url = None
 
                 df = pd.DataFrame(books)
+
                 st.session_state.books = df
 
-            st.success(f"Successfully collected {len(df)} books!")
+            st.success(
+                f"Successfully collected {len(df)} books!"
+            )
 
         except Exception as e:
+
             st.error(f"Scraping error: {e}")
 
     if not st.session_state.books.empty:
@@ -500,7 +826,7 @@ elif page == "🌐 Web Scraping":
 
         st.download_button(
             "⬇️ Download Book Dataset CSV",
-            df.to_csv(index=False).encode("utf-8"),
+            df.to_csv(index=False).encode("utf-8-sig"),
             "books_data.csv",
             "text/csv"
         )
@@ -508,12 +834,17 @@ elif page == "🌐 Web Scraping":
     footer()
 
 
-# ---------------- EDA ----------------
+# =====================================================
+# EXPLORATORY DATA ANALYSIS
+# =====================================================
 
 elif page == "🔍 Exploratory Data Analysis":
 
     st.title("🔍 Exploratory Data Analysis")
-    st.write("Understand and explore your book dataset.")
+
+    st.write(
+        "Understand and explore your book dataset."
+    )
 
     uploaded = st.file_uploader(
         "Upload your book CSV file",
@@ -524,17 +855,20 @@ elif page == "🔍 Exploratory Data Analysis":
     if uploaded:
 
         try:
+
             st.session_state.books = pd.read_csv(uploaded)
+
             st.success("Dataset uploaded successfully!")
 
         except Exception as e:
+
             st.error(f"Unable to read CSV: {e}")
 
     if not st.session_state.books.empty:
 
         df = st.session_state.books
 
-        a, b, c = st.columns(3)
+        a, b, c, d = st.columns(4)
 
         with a:
             metric_card("Total Records", len(df))
@@ -548,223 +882,296 @@ elif page == "🔍 Exploratory Data Analysis":
                 int(df.isnull().sum().sum())
             )
 
+        with d:
+            metric_card(
+                "Duplicate Records",
+                int(df.duplicated().sum())
+            )
+
+        st.markdown("---")
+
         st.subheader("📋 Dataset Preview")
-        st.dataframe(df.head(20), use_container_width=True)
+
+        st.dataframe(
+            df.head(20),
+            use_container_width=True
+        )
+
+        st.markdown("---")
 
         st.subheader("📊 Statistical Summary")
 
         numeric = get_numeric_data(df)
 
         if not numeric.empty:
+
             st.dataframe(
                 numeric.describe(),
                 use_container_width=True
             )
+
         else:
+
             st.info("No numeric columns available.")
 
-        st.subheader("🔎 Missing Values")
-        st.bar_chart(df.isnull().sum())
+        st.markdown("---")
 
-        st.subheader("Duplicate Records")
-        st.write(f"Total duplicates: {df.duplicated().sum()}")
+        st.subheader("🔎 Missing Values Analysis")
+
+        missing = df.isnull().sum()
+
+        if missing.sum() > 0:
+
+            st.bar_chart(missing)
+
+        else:
+
+            st.success("No missing values found!")
+
+        st.markdown("---")
+
+        st.subheader("📌 Dataset Information")
+
+        st.write("Column Names:")
+
+        st.write(df.columns.tolist())
+
+        st.write("Data Types:")
+
+        st.dataframe(
+            df.dtypes.astype(str).rename("Data Type"),
+            use_container_width=True
+        )
 
     else:
-        st.info("Scrape books or upload a CSV file to begin analysis.")
+
+        st.info(
+            "Scrape books or upload a CSV file to begin analysis."
+        )
 
     footer()
 
 
-# ---------------- DATA VISUALIZATION ----------------
+# =====================================================
+# DATA VISUALIZATION
+# =====================================================
 
-elif page == "📊 Data Visualization":
+elif page == "📈 Data Visualization":
 
-    st.title("📊 Data Visualization")
-    st.write("Discover patterns and insights through visual analytics.")
+    st.title("📈 Data Visualization")
+
+    st.write(
+        "Discover patterns and insights through visual analytics."
+    )
 
     if not st.session_state.books.empty:
 
         df = st.session_state.books.copy()
-        numeric = get_numeric_data(df)
 
-        st.subheader("📈 Book Analytics")
+        price = safe_numeric(df, "Price")
+        rating = safe_numeric(df, "Rating")
 
-        if "Price" in numeric.columns:
+        st.subheader("💰 Book Price Distribution")
+
+        if price.notna().any():
 
             fig, ax = plt.subplots(figsize=(10, 4))
-            ax.hist(df["Price"].dropna(), bins=15)
+
+            ax.hist(
+                price.dropna(),
+                bins=15,
+                edgecolor="white"
+            )
+
             ax.set_title("Book Price Distribution")
-            ax.set_xlabel("Price")
+            ax.set_xlabel("Price (£)")
             ax.set_ylabel("Number of Books")
 
             st.pyplot(fig)
+
             plt.close(fig)
 
-        if "Rating" in numeric.columns:
+        st.markdown("---")
+
+        st.subheader("⭐ Rating Distribution")
+
+        if rating.notna().any():
 
             fig, ax = plt.subplots(figsize=(10, 4))
-            df["Rating"].value_counts().sort_index().plot(
+
+            rating.value_counts().sort_index().plot(
                 kind="bar",
                 ax=ax
             )
+
             ax.set_title("Book Rating Distribution")
             ax.set_xlabel("Rating")
             ax.set_ylabel("Number of Books")
 
             st.pyplot(fig)
+
             plt.close(fig)
 
-        if "Price" in numeric.columns and "Rating" in numeric.columns:
+        st.markdown("---")
+
+        st.subheader("🔍 Price vs Rating")
+
+        chart_data = pd.DataFrame({
+            "Price": price,
+            "Rating": rating
+        }).dropna()
+
+        if not chart_data.empty:
 
             fig, ax = plt.subplots(figsize=(10, 4))
+
             sns.scatterplot(
-                data=df,
+                data=chart_data,
                 x="Price",
                 y="Rating",
                 ax=ax
             )
+
             ax.set_title("Price vs Rating")
 
             st.pyplot(fig)
+
             plt.close(fig)
 
-        st.subheader("📋 Data Table")
-        st.dataframe(df, use_container_width=True)
+        if "Availability" in df.columns:
+
+            st.markdown("---")
+
+            st.subheader("📦 Book Availability")
+
+            availability = df["Availability"].value_counts()
+
+            st.bar_chart(availability)
+
+        st.markdown("---")
+
+        st.subheader("📋 Complete Data Table")
+
+        st.dataframe(
+            df,
+            use_container_width=True
+        )
 
     else:
-        st.warning("Please scrape books or upload a CSV file in EDA first.")
+
+        st.warning(
+            "Please scrape books or upload a CSV file in EDA first."
+        )
 
     footer()
 
 
-# ---------------- SENTIMENT ANALYSIS ----------------
+# =====================================================
+# SENTIMENT ANALYSIS
+# =====================================================
 
 elif page == "💬 Sentiment Analysis":
 
     st.title("💬 Sentiment Analysis")
-    st.write("Analyze text and understand its emotional polarity.")
 
-    text_input = st.text_area(
-        "Enter a sentence or review",
-        placeholder="Type your book review here..."
-    )
-
-    if st.button("🔍 Analyze Sentiment"):
-
-        if text_input.strip():
-
-            polarity = TextBlob(text_input).sentiment.polarity
-
-            if polarity > 0:
-                result = "Positive"
-                icon = "😊"
-
-            elif polarity < 0:
-                result = "Negative"
-                icon = "😞"
-
-            else:
-                result = "Neutral"
-                icon = "😐"
-
-            st.markdown(f"""
-            <div class="hero">
-                <h1>{icon} {result}</h1>
-                <p>Sentiment Polarity: {polarity:.3f}</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-            st.subheader("📊 Sentiment Result")
-
-            x, y, z = st.columns(3)
-
-            with x:
-                metric_card("Positive", "😊")
-
-            with y:
-                metric_card("Negative", "😞")
-
-            with z:
-                metric_card("Neutral", "😐")
-
-        else:
-            st.warning("Please enter some text.")
-
-    footer()
-elif page == "💬 Sentiment Analysis":
-
-    st.title("💬 Sentiment Analysis")
     st.write(
-        "Analyze reviews, detect emotions and understand public opinions using NLP."
+        "Analyze reviews, detect emotions and understand opinions using NLP."
     )
 
-    from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-    import re
+    if not VADER_AVAILABLE:
+
+        st.error(
+            "VADER is not installed. Add vaderSentiment to requirements.txt."
+        )
+
+        st.stop()
 
     analyzer = SentimentIntensityAnalyzer()
 
-    # Emotion Detection
+    # EMOTION DETECTION
+
     def detect_emotion(text):
 
-        text = text.lower()
+        text = str(text).lower()
 
         emotions = {
+
             "Joy 😊": [
                 "happy", "love", "excellent", "amazing",
                 "wonderful", "great", "fantastic", "awesome"
             ],
+
             "Sadness 😢": [
                 "sad", "disappointed", "unhappy",
                 "upset", "depressed", "poor"
             ],
+
             "Anger 😡": [
                 "angry", "hate", "worst", "terrible",
                 "awful", "horrible", "bad"
             ],
+
             "Fear 😨": [
                 "afraid", "scared", "fear", "worry",
                 "worried", "nervous"
             ],
+
             "Surprise 😲": [
                 "surprised", "unexpected", "shocking",
                 "astonishing", "unbelievable"
             ]
+
         }
 
         detected = []
 
         for emotion, words in emotions.items():
+
             if any(word in text for word in words):
+
                 detected.append(emotion)
 
-        return ", ".join(detected) if detected else "No specific emotion detected"
+        return (
+            ", ".join(detected)
+            if detected
+            else "No specific emotion detected"
+        )
 
-    # Sentiment Classification
+    # SENTIMENT CLASSIFICATION
+
     def analyze_sentiment(text):
 
-        score = analyzer.polarity_scores(str(text))["compound"]
+        score = analyzer.polarity_scores(
+            str(text)
+        )["compound"]
 
         if score >= 0.05:
+
             sentiment = "Positive 😊"
 
         elif score <= -0.05:
+
             sentiment = "Negative 😞"
 
         else:
+
             sentiment = "Neutral 😐"
 
-        emotion = detect_emotion(str(text))
+        emotion = detect_emotion(text)
 
         return sentiment, score, emotion
 
-    # Tabs
+    # TABS
+
     tab1, tab2, tab3 = st.tabs([
         "✍️ Text Analysis",
         "📁 CSV Analysis",
         "📊 Insights & Trends"
     ])
 
-    # ---------------- TAB 1: TEXT ANALYSIS ----------------
+    # ---------------------------------
+    # TAB 1 - TEXT ANALYSIS
+    # ---------------------------------
 
     with tab1:
 
@@ -788,11 +1195,16 @@ elif page == "💬 Sentiment Analysis":
             key="sentiment_text"
         )
 
-        if st.button("🔍 Analyze Sentiment", key="analyze_single"):
+        if st.button(
+            "🔍 Analyze Sentiment",
+            key="analyze_single"
+        ):
 
             if text_input.strip():
 
-                sentiment, score, emotion = analyze_sentiment(text_input)
+                sentiment, score, emotion = analyze_sentiment(
+                    text_input
+                )
 
                 st.markdown("---")
 
@@ -816,27 +1228,33 @@ elif page == "💬 Sentiment Analysis":
                 st.markdown("### 💡 Business Insights")
 
                 if "Positive" in sentiment:
+
                     st.success(
-                        "Customers show positive opinions. "
+                        "Positive opinions detected. "
                         "Use positive feedback for marketing and promotion."
                     )
 
                 elif "Negative" in sentiment:
+
                     st.error(
                         "Negative feedback detected. "
-                        "Identify customer problems and improve product quality."
+                        "Identify customer problems and improve quality."
                     )
 
                 else:
+
                     st.info(
                         "Neutral opinion detected. "
-                        "Collect more feedback to understand customer preferences."
+                        "Collect more feedback to understand preferences."
                     )
 
                 st.markdown("### 📈 Sentiment Score")
 
                 st.progress(
-                    min(max((score + 1) / 2, 0.0), 1.0)
+                    min(
+                        max((score + 1) / 2, 0.0),
+                        1.0
+                    )
                 )
 
                 st.caption(
@@ -844,9 +1262,12 @@ elif page == "💬 Sentiment Analysis":
                 )
 
             else:
+
                 st.warning("Please enter some text to analyze.")
 
-    # ---------------- TAB 2: CSV ANALYSIS ----------------
+    # ---------------------------------
+    # TAB 2 - CSV ANALYSIS
+    # ---------------------------------
 
     with tab2:
 
@@ -909,11 +1330,14 @@ elif page == "💬 Sentiment Analysis":
                             lambda x: x[2]
                         )
 
-                        st.session_state[
-                            "sentiment_results"
-                        ] = result_data
+                        st.session_state.sentiment_results = result_data
+
+                        st.success(
+                            "All reviews analyzed successfully!"
+                        )
 
                 else:
+
                     st.warning(
                         "No text columns found in the uploaded dataset."
                     )
@@ -922,33 +1346,25 @@ elif page == "💬 Sentiment Analysis":
 
                 st.error(f"CSV Error: {e}")
 
-        if "sentiment_results" in st.session_state:
+        if st.session_state.sentiment_results is not None:
 
-            result_data = st.session_state[
-                "sentiment_results"
-            ]
+            result_data = st.session_state.sentiment_results
 
             st.markdown("---")
 
             st.subheader("📊 Analysis Results")
 
-            positive = (
-                result_data["Sentiment"].str.contains(
-                    "Positive"
-                ).sum()
-            )
+            positive = result_data["Sentiment"].str.contains(
+                "Positive"
+            ).sum()
 
-            negative = (
-                result_data["Sentiment"].str.contains(
-                    "Negative"
-                ).sum()
-            )
+            negative = result_data["Sentiment"].str.contains(
+                "Negative"
+            ).sum()
 
-            neutral = (
-                result_data["Sentiment"].str.contains(
-                    "Neutral"
-                ).sum()
-            )
+            neutral = result_data["Sentiment"].str.contains(
+                "Neutral"
+            ).sum()
 
             a, b, c = st.columns(3)
 
@@ -976,22 +1392,21 @@ elif page == "💬 Sentiment Analysis":
                 key="download_sentiment"
             )
 
-    # ---------------- TAB 3: INSIGHTS ----------------
+    # ---------------------------------
+    # TAB 3 - INSIGHTS
+    # ---------------------------------
 
     with tab3:
 
         st.subheader("📊 Sentiment Insights & Trends")
 
-        if "sentiment_results" in st.session_state:
+        if st.session_state.sentiment_results is not None:
 
-            result_data = st.session_state[
-                "sentiment_results"
-            ]
+            result_data = st.session_state.sentiment_results
 
-            sentiment_counts = (
-                result_data["Sentiment"]
-                .value_counts()
-            )
+            sentiment_counts = result_data[
+                "Sentiment"
+            ].value_counts()
 
             total = len(result_data)
 
@@ -1009,6 +1424,7 @@ elif page == "💬 Sentiment Analysis":
             ax.set_ylabel("")
 
             st.pyplot(fig)
+
             plt.close(fig)
 
             st.markdown("### Sentiment Comparison")
@@ -1025,6 +1441,7 @@ elif page == "💬 Sentiment Analysis":
             ax.set_ylabel("Number of Reviews")
 
             st.pyplot(fig)
+
             plt.close(fig)
 
             st.markdown("### 😊 Emotion Distribution")
@@ -1046,13 +1463,14 @@ elif page == "💬 Sentiment Analysis":
                 st.bar_chart(emotion_counts)
 
             else:
+
                 st.info("No specific emotions detected.")
 
             st.markdown("### 💡 Business Recommendations")
 
             if total > 0:
 
-                positive_percent = positive = (
+                positive_percent = (
                     result_data["Sentiment"]
                     .str.contains("Positive")
                     .sum() / total * 100
