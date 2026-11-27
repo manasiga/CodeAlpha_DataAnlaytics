@@ -3,4 +3,3 @@ pandas
 requests
 matplotlib
 beautifulsoup4
-vaderSentiment
