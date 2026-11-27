@@ -56,7 +56,7 @@ elif task == "Task 1 - Web Scraping":
 
     st.write("Collect book information from a website using Python.")
 
-    pages = st.slider(pages = st.slider("Number of pages to scrape", 1, 50, 50)
+    pages = st.slider(pages = st.slider("Number of pages to scrape", 1, 50, 50))
 
     if st.button("Start Web Scraping"):
 
