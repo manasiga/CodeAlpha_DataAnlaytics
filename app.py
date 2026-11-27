@@ -323,15 +323,19 @@ if page == "🏠 Home":
     st.markdown("""
     <div class="hero">
 
+        st.markdown(
+    """
+    <div class="hero">
         <h1>📚 Welcome to BookLens</h1>
-
         <p>Discover Books. Explore Data. Understand Insights.</p>
-
         <p>
-        A smart platform for collecting, analyzing
-        and visualizing book data.
+            A smart platform for collecting, analyzing
+            and visualizing book data.
         </p>
-
+    </div>
+    """,
+    unsafe_allow_html=True
+)
     </div>
     """, unsafe_allow_html=True)
 
