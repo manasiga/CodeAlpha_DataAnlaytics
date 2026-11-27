@@ -691,3 +691,413 @@ elif page == "💬 Sentiment Analysis":
             st.warning("Please enter some text.")
 
     footer()
+elif page == "💬 Sentiment Analysis":
+
+    st.title("💬 Sentiment Analysis")
+    st.write(
+        "Analyze reviews, detect emotions and understand public opinions using NLP."
+    )
+
+    from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+    import re
+
+    analyzer = SentimentIntensityAnalyzer()
+
+    # Emotion Detection
+    def detect_emotion(text):
+
+        text = text.lower()
+
+        emotions = {
+            "Joy 😊": [
+                "happy", "love", "excellent", "amazing",
+                "wonderful", "great", "fantastic", "awesome"
+            ],
+            "Sadness 😢": [
+                "sad", "disappointed", "unhappy",
+                "upset", "depressed", "poor"
+            ],
+            "Anger 😡": [
+                "angry", "hate", "worst", "terrible",
+                "awful", "horrible", "bad"
+            ],
+            "Fear 😨": [
+                "afraid", "scared", "fear", "worry",
+                "worried", "nervous"
+            ],
+            "Surprise 😲": [
+                "surprised", "unexpected", "shocking",
+                "astonishing", "unbelievable"
+            ]
+        }
+
+        detected = []
+
+        for emotion, words in emotions.items():
+            if any(word in text for word in words):
+                detected.append(emotion)
+
+        return ", ".join(detected) if detected else "No specific emotion detected"
+
+    # Sentiment Classification
+    def analyze_sentiment(text):
+
+        score = analyzer.polarity_scores(str(text))["compound"]
+
+        if score >= 0.05:
+            sentiment = "Positive 😊"
+
+        elif score <= -0.05:
+            sentiment = "Negative 😞"
+
+        else:
+            sentiment = "Neutral 😐"
+
+        emotion = detect_emotion(str(text))
+
+        return sentiment, score, emotion
+
+    # Tabs
+    tab1, tab2, tab3 = st.tabs([
+        "✍️ Text Analysis",
+        "📁 CSV Analysis",
+        "📊 Insights & Trends"
+    ])
+
+    # ---------------- TAB 1: TEXT ANALYSIS ----------------
+
+    with tab1:
+
+        st.subheader("✍️ Analyze Your Text")
+
+        source = st.selectbox(
+            "Select Data Source",
+            [
+                "Book Reviews",
+                "Amazon Reviews",
+                "Social Media",
+                "News Articles",
+                "Other"
+            ]
+        )
+
+        text_input = st.text_area(
+            "Enter Review / Text",
+            placeholder="Example: This book is amazing and very interesting!",
+            height=150,
+            key="sentiment_text"
+        )
+
+        if st.button("🔍 Analyze Sentiment", key="analyze_single"):
+
+            if text_input.strip():
+
+                sentiment, score, emotion = analyze_sentiment(text_input)
+
+                st.markdown("---")
+
+                st.subheader("Analysis Result")
+
+                c1, c2, c3 = st.columns(3)
+
+                with c1:
+                    metric_card("Sentiment", sentiment)
+
+                with c2:
+                    metric_card("Polarity Score", f"{score:.3f}")
+
+                with c3:
+                    metric_card("Data Source", source)
+
+                st.markdown("### 🧠 Emotion Detection")
+
+                st.info(emotion)
+
+                st.markdown("### 💡 Business Insights")
+
+                if "Positive" in sentiment:
+                    st.success(
+                        "Customers show positive opinions. "
+                        "Use positive feedback for marketing and promotion."
+                    )
+
+                elif "Negative" in sentiment:
+                    st.error(
+                        "Negative feedback detected. "
+                        "Identify customer problems and improve product quality."
+                    )
+
+                else:
+                    st.info(
+                        "Neutral opinion detected. "
+                        "Collect more feedback to understand customer preferences."
+                    )
+
+                st.markdown("### 📈 Sentiment Score")
+
+                st.progress(
+                    min(max((score + 1) / 2, 0.0), 1.0)
+                )
+
+                st.caption(
+                    "Score range: -1 (Negative) to +1 (Positive)"
+                )
+
+            else:
+                st.warning("Please enter some text to analyze.")
+
+    # ---------------- TAB 2: CSV ANALYSIS ----------------
+
+    with tab2:
+
+        st.subheader("📁 Bulk Sentiment Analysis")
+
+        uploaded_file = st.file_uploader(
+            "Upload Review Dataset (CSV)",
+            type=["csv"],
+            key="sentiment_upload"
+        )
+
+        if uploaded_file:
+
+            try:
+
+                data = pd.read_csv(uploaded_file)
+
+                st.success("Dataset uploaded successfully!")
+
+                st.subheader("Dataset Preview")
+
+                st.dataframe(
+                    data.head(10),
+                    use_container_width=True
+                )
+
+                text_columns = data.select_dtypes(
+                    include=["object", "string"]
+                ).columns.tolist()
+
+                if text_columns:
+
+                    selected_column = st.selectbox(
+                        "Select Text / Review Column",
+                        text_columns
+                    )
+
+                    if st.button(
+                        "🚀 Analyze All Reviews",
+                        key="bulk_analyze"
+                    ):
+
+                        result_data = data.copy()
+
+                        results = result_data[
+                            selected_column
+                        ].fillna("").astype(str).apply(
+                            analyze_sentiment
+                        )
+
+                        result_data["Sentiment"] = results.apply(
+                            lambda x: x[0]
+                        )
+
+                        result_data["Polarity Score"] = results.apply(
+                            lambda x: x[1]
+                        )
+
+                        result_data["Emotion"] = results.apply(
+                            lambda x: x[2]
+                        )
+
+                        st.session_state[
+                            "sentiment_results"
+                        ] = result_data
+
+                else:
+                    st.warning(
+                        "No text columns found in the uploaded dataset."
+                    )
+
+            except Exception as e:
+
+                st.error(f"CSV Error: {e}")
+
+        if "sentiment_results" in st.session_state:
+
+            result_data = st.session_state[
+                "sentiment_results"
+            ]
+
+            st.markdown("---")
+
+            st.subheader("📊 Analysis Results")
+
+            positive = (
+                result_data["Sentiment"].str.contains(
+                    "Positive"
+                ).sum()
+            )
+
+            negative = (
+                result_data["Sentiment"].str.contains(
+                    "Negative"
+                ).sum()
+            )
+
+            neutral = (
+                result_data["Sentiment"].str.contains(
+                    "Neutral"
+                ).sum()
+            )
+
+            a, b, c = st.columns(3)
+
+            with a:
+                metric_card("Positive", positive)
+
+            with b:
+                metric_card("Negative", negative)
+
+            with c:
+                metric_card("Neutral", neutral)
+
+            st.dataframe(
+                result_data,
+                use_container_width=True
+            )
+
+            st.download_button(
+                "⬇️ Download Analyzed CSV",
+                result_data.to_csv(
+                    index=False
+                ).encode("utf-8-sig"),
+                "booklens_sentiment_results.csv",
+                "text/csv",
+                key="download_sentiment"
+            )
+
+    # ---------------- TAB 3: INSIGHTS ----------------
+
+    with tab3:
+
+        st.subheader("📊 Sentiment Insights & Trends")
+
+        if "sentiment_results" in st.session_state:
+
+            result_data = st.session_state[
+                "sentiment_results"
+            ]
+
+            sentiment_counts = (
+                result_data["Sentiment"]
+                .value_counts()
+            )
+
+            total = len(result_data)
+
+            st.markdown("### Overall Sentiment Distribution")
+
+            fig, ax = plt.subplots(figsize=(8, 5))
+
+            sentiment_counts.plot(
+                kind="pie",
+                autopct="%1.1f%%",
+                ax=ax,
+                startangle=90
+            )
+
+            ax.set_ylabel("")
+
+            st.pyplot(fig)
+            plt.close(fig)
+
+            st.markdown("### Sentiment Comparison")
+
+            fig, ax = plt.subplots(figsize=(9, 4))
+
+            sentiment_counts.plot(
+                kind="bar",
+                ax=ax
+            )
+
+            ax.set_title("Positive vs Negative vs Neutral")
+            ax.set_xlabel("Sentiment")
+            ax.set_ylabel("Number of Reviews")
+
+            st.pyplot(fig)
+            plt.close(fig)
+
+            st.markdown("### 😊 Emotion Distribution")
+
+            emotion_counts = (
+                result_data["Emotion"]
+                .str.split(", ")
+                .explode()
+                .value_counts()
+            )
+
+            emotion_counts = emotion_counts[
+                emotion_counts.index !=
+                "No specific emotion detected"
+            ]
+
+            if not emotion_counts.empty:
+
+                st.bar_chart(emotion_counts)
+
+            else:
+                st.info("No specific emotions detected.")
+
+            st.markdown("### 💡 Business Recommendations")
+
+            if total > 0:
+
+                positive_percent = positive = (
+                    result_data["Sentiment"]
+                    .str.contains("Positive")
+                    .sum() / total * 100
+                )
+
+                negative_percent = (
+                    result_data["Sentiment"]
+                    .str.contains("Negative")
+                    .sum() / total * 100
+                )
+
+                st.write(
+                    f"😊 Positive Opinions: {positive_percent:.1f}%"
+                )
+
+                st.write(
+                    f"😞 Negative Opinions: {negative_percent:.1f}%"
+                )
+
+                if positive_percent > negative_percent:
+
+                    st.success(
+                        "Positive feedback is higher. "
+                        "Focus on customer retention and marketing."
+                    )
+
+                elif negative_percent > positive_percent:
+
+                    st.warning(
+                        "Negative feedback is higher. "
+                        "Focus on product improvement and customer satisfaction."
+                    )
+
+                else:
+
+                    st.info(
+                        "Positive and negative opinions are balanced. "
+                        "Monitor customer feedback regularly."
+                    )
+
+        else:
+
+            st.info(
+                "Upload a CSV dataset and analyze reviews "
+                "to view sentiment insights and trends."
+            )
+
+    footer()
