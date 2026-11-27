@@ -1,3 +1,4 @@
+```python
 import streamlit as st
 import pandas as pd
 import requests
@@ -7,10 +8,13 @@ from urllib.parse import urljoin
 
 # PAGE CONFIGURATION
 st.set_page_config(
-    page_title="BookLens",
-    page_icon="📚",
+    page_title="CodeAlpha Data Analytics",
+    page_icon="📊",
     layout="wide"
 )
+
+st.title("📊 CodeAlpha Data Analytics Internship")
+st.write("Welcome to my Data Analytics Project Portfolio!")
 
 # SESSION STATE
 if "books_data" not in st.session_state:
@@ -19,131 +23,80 @@ if "books_data" not in st.session_state:
 if "dataset" not in st.session_state:
     st.session_state["dataset"] = None
 
-if "page" not in st.session_state:
-    st.session_state["page"] = "Home"
+# SIDEBAR
+st.sidebar.title("Navigation")
 
-# CUSTOM CSS
-st.markdown("""
-<style>
-.main-title {
-    font-size: 42px;
-    font-weight: bold;
-    text-align: center;
-    color: #6C63FF;
-}
-.subtitle {
-    text-align: center;
-    font-size: 18px;
-    color: gray;
-}
-div.stButton > button {
-    width: 100%;
-    height: 65px;
-    border-radius: 12px;
-    font-size: 17px;
-    font-weight: bold;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# NAVIGATION
-pages = [
-    "Home",
-    "Task 1 - Web Scraping",
-    "Task 2 - Exploratory Data Analysis",
-    "Task 3 - Data Visualization",
-    "Task 4 - Sentiment Analysis",
-    "Data Export"
-]
-
-st.sidebar.title("📚 BookLens")
-st.sidebar.markdown("---")
-
-selected_page = st.sidebar.radio(
-    "Navigation",
-    pages,
-    index=pages.index(st.session_state["page"])
+task = st.sidebar.radio(
+    "Select a Task",
+    [
+        "Home",
+        "Task 1 - Web Scraping",
+        "Task 2 - Exploratory Data Analysis",
+        "Task 3 - Data Visualization",
+        "Task 4 - Sentiment Analysis"
+    ],
+    key="navigation"
 )
 
-st.session_state["page"] = selected_page
+# HOME
+if task == "Home":
 
-# HOME PAGE
-if st.session_state["page"] == "Home":
-
-    st.markdown(
-        '<p class="main-title">📚 BookLens</p>',
-        unsafe_allow_html=True
-    )
-
-    st.markdown(
-        '<p class="subtitle">Discover Books • Explore Data • Gain Insights</p>',
-        unsafe_allow_html=True
-    )
-
-    st.markdown("---")
-
-    st.subheader("Welcome to BookLens!")
+    st.header("Data Analytics Projects")
 
     st.write(
-        "An interactive Book Data Analytics platform "
-        "to collect, analyze and visualize book information."
+        "This website contains all four tasks "
+        "completed during my Data Analytics Internship."
     )
 
-    st.markdown("### Explore Our Features")
+    st.subheader("Explore Our Projects")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
 
     with col1:
-        if st.button("🌐 Web Scraping"):
-            st.session_state["page"] = "Task 1 - Web Scraping"
+
+        if st.button(
+            "🌐 Task 1 - Web Scraping",
+            use_container_width=True
+        ):
+            st.session_state["navigation"] = "Task 1 - Web Scraping"
+            st.rerun()
+
+        if st.button(
+            "📈 Task 2 - Exploratory Data Analysis",
+            use_container_width=True
+        ):
+            st.session_state["navigation"] = "Task 2 - Exploratory Data Analysis"
             st.rerun()
 
     with col2:
-        if st.button("📈 Data Analysis"):
-            st.session_state["page"] = "Task 2 - Exploratory Data Analysis"
+
+        if st.button(
+            "📊 Task 3 - Data Visualization",
+            use_container_width=True
+        ):
+            st.session_state["navigation"] = "Task 3 - Data Visualization"
             st.rerun()
 
-    with col3:
-        if st.button("📊 Data Visualization"):
-            st.session_state["page"] = "Task 3 - Data Visualization"
+        if st.button(
+            "💬 Task 4 - Sentiment Analysis",
+            use_container_width=True
+        ):
+            st.session_state["navigation"] = "Task 4 - Sentiment Analysis"
             st.rerun()
 
-    col4, col5 = st.columns(2)
-
-    with col4:
-        if st.button("💬 Sentiment Analysis"):
-            st.session_state["page"] = "Task 4 - Sentiment Analysis"
-            st.rerun()
-
-    with col5:
-        if st.button("📥 Data Export"):
-            st.session_state["page"] = "Data Export"
-            st.rerun()
-
-    st.markdown("---")
-
-    if st.session_state["books_data"] is not None:
-        st.success(
-            f"Dataset Available: {len(st.session_state['books_data'])} Books"
-        )
-    else:
-        st.info("Start Web Scraping to collect book data.")
-
-    st.markdown(
-        "<center>Developed using Python, Streamlit and Data Analytics</center>",
-        unsafe_allow_html=True
-    )
 
 # TASK 1 - WEB SCRAPING
-elif st.session_state["page"] == "Task 1 - Web Scraping":
+elif task == "Task 1 - Web Scraping":
 
     st.header("🌐 Web Scraping")
 
     st.write("Collect book information using Python.")
 
-    pages_count = st.slider(
+    pages = st.slider(
         "Number of pages to scrape",
-        1, 50, 50
+        min_value=1,
+        max_value=50,
+        value=50
     )
 
     if st.button("Start Web Scraping"):
@@ -154,7 +107,7 @@ elif st.session_state["page"] == "Task 1 - Web Scraping":
         status = st.empty()
 
         try:
-            for page in range(1, pages_count + 1):
+            for page in range(1, pages + 1):
 
                 url = (
                     "https://books.toscrape.com/catalogue/"
@@ -192,7 +145,9 @@ elif st.session_state["page"] == "Task 1 - Web Scraping":
                         ".star-rating"
                     )
 
-                    rating = rating_element.get("class", ["", "Unknown"])[1]
+                    rating = (
+                        rating_element.get("class", ["", "Unknown"])[1]
+                    )
 
                     book_url = urljoin(
                         url,
@@ -201,21 +156,23 @@ elif st.session_state["page"] == "Task 1 - Web Scraping":
 
                     books.append({
                         "Title": title,
-                        "Price": float(price.replace("£", "").replace("Â", "")),
+                        "Price": price,
                         "Availability": availability,
                         "Rating": rating,
                         "URL": book_url
                     })
 
-                progress.progress(page / pages_count)
-                status.write(f"Scraping page {page} of {pages_count}")
+                progress.progress(page / pages)
+                status.write(f"Scraping page {page} of {pages}")
 
             df = pd.DataFrame(books)
 
             st.session_state["books_data"] = df
             st.session_state["dataset"] = df
 
-            st.success(f"Successfully scraped {len(df)} books!")
+            st.success(
+                f"Successfully scraped {len(df)} books!"
+            )
 
         except requests.RequestException as e:
             st.error(f"Network error: {e}")
@@ -229,36 +186,43 @@ elif st.session_state["page"] == "Task 1 - Web Scraping":
 
         st.subheader("Scraped Book Data")
 
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(
+            df,
+            use_container_width=True
+        )
 
         st.metric("Total Books", len(df))
 
         csv = df.to_csv(index=False).encode("utf-8")
 
         st.download_button(
-            "📥 Download CSV",
+            "Download CSV",
             csv,
             "books_data.csv",
             "text/csv"
         )
 
+
 # TASK 2 - EDA
-elif st.session_state["page"] == "Task 2 - Exploratory Data Analysis":
+elif task == "Task 2 - Exploratory Data Analysis":
 
     st.header("📈 Exploratory Data Analysis")
 
-    st.write("Analyze your book dataset.")
+    st.write("Upload a CSV file to analyze your dataset.")
 
     uploaded_file = st.file_uploader(
-        "Upload your CSV dataset (Optional)",
+        "Upload CSV File (Optional)",
         type=["csv"],
         key="eda_upload"
     )
 
     if uploaded_file:
+
         try:
             df = pd.read_csv(uploaded_file)
+
             st.session_state["dataset"] = df
+
             st.success("Dataset uploaded successfully!")
 
         except Exception as e:
@@ -269,53 +233,59 @@ elif st.session_state["page"] == "Task 2 - Exploratory Data Analysis":
         df = st.session_state["dataset"]
 
         st.subheader("Dataset Preview")
-        st.dataframe(df.head(10), use_container_width=True)
+
+        st.dataframe(df.head(10))
 
         col1, col2, col3 = st.columns(3)
 
-        col1.metric("Total Rows", df.shape[0])
-        col2.metric("Total Columns", df.shape[1])
+        col1.metric("Rows", df.shape[0])
+        col2.metric("Columns", df.shape[1])
+
         col3.metric(
             "Missing Values",
             int(df.isnull().sum().sum())
         )
 
         st.subheader("Dataset Information")
-        st.dataframe(
-            pd.DataFrame({
-                "Column": df.columns,
-                "Data Type": df.dtypes.astype(str)
-            })
-        )
+
+        st.write(df.dtypes.astype(str))
 
         st.subheader("Statistical Summary")
-        st.dataframe(df.describe(include="all"))
+
+        st.dataframe(
+            df.describe(include="all")
+        )
 
         st.subheader("Missing Values")
-        st.dataframe(df.isnull().sum().to_frame("Missing Count"))
+
+        st.dataframe(df.isnull().sum())
 
         st.subheader("Duplicate Rows")
+
         st.write(int(df.duplicated().sum()))
 
     else:
-        st.info("Run Web Scraping first or upload a CSV dataset.")
+        st.info("Run Task 1 first or upload a CSV file.")
+
 
 # TASK 3 - DATA VISUALIZATION
-elif st.session_state["page"] == "Task 3 - Data Visualization":
+elif task == "Task 3 - Data Visualization":
 
     st.header("📊 Data Visualization")
 
-    st.write("Create charts and graphs from your book dataset.")
+    st.write("Create charts and graphs from your dataset.")
 
     uploaded_file = st.file_uploader(
-        "Upload your CSV dataset (Optional)",
+        "Upload CSV File (Optional)",
         type=["csv"],
         key="visual_upload"
     )
 
     if uploaded_file:
+
         try:
             df = pd.read_csv(uploaded_file)
+
             st.session_state["dataset"] = df
 
         except Exception as e:
@@ -337,40 +307,56 @@ elif st.session_state["page"] == "Task 3 - Data Visualization":
             )
 
             st.subheader("Bar Chart")
+
             st.bar_chart(df[column])
 
             st.subheader("Histogram")
 
             fig, ax = plt.subplots()
 
-            ax.hist(df[column].dropna(), bins=15)
+            ax.hist(
+                df[column].dropna(),
+                bins=15
+            )
 
             ax.set_xlabel(column)
             ax.set_ylabel("Frequency")
             ax.set_title(f"Distribution of {column}")
 
             st.pyplot(fig)
+
             plt.close(fig)
 
             st.subheader("Correlation Matrix")
 
             if len(numeric_columns) > 1:
-                st.dataframe(df[numeric_columns].corr())
+
+                correlation = df[numeric_columns].corr()
+
+                st.dataframe(correlation)
+
             else:
-                st.info("At least two numeric columns are needed.")
+                st.info(
+                    "At least two numeric columns are needed."
+                )
 
         else:
-            st.warning("No numeric columns found.")
+            st.warning(
+                "No numeric columns found in this dataset."
+            )
 
     else:
-        st.info("Run Web Scraping first or upload a CSV dataset.")
+        st.info("Run Task 1 first or upload a CSV file.")
+
 
 # TASK 4 - SENTIMENT ANALYSIS
-elif st.session_state["page"] == "Task 4 - Sentiment Analysis":
+elif task == "Task 4 - Sentiment Analysis":
 
     st.header("💬 Sentiment Analysis")
 
-    st.write("Analyze text reviews and identify their sentiment.")
+    st.write(
+        "Analyze text reviews and identify their sentiment."
+    )
 
     positive_words = [
         "good", "great", "excellent", "amazing",
@@ -406,7 +392,9 @@ elif st.session_state["page"] == "Task 4 - Sentiment Analysis":
 
         return "Neutral"
 
-    review = st.text_area("Enter your review here:")
+    review = st.text_area(
+        "Enter your review here:"
+    )
 
     if st.button("Analyze Sentiment"):
 
@@ -428,48 +416,11 @@ elif st.session_state["page"] == "Task 4 - Sentiment Analysis":
         else:
             st.warning("Please enter a review.")
 
-# DATA EXPORT
-elif st.session_state["page"] == "Data Export":
 
-    st.header("📥 Data Export")
-
-    st.write("Download your collected book dataset.")
-
-    if st.session_state["books_data"] is not None:
-
-        df = st.session_state["books_data"]
-
-        st.dataframe(df, use_container_width=True)
-
-        csv = df.to_csv(index=False).encode("utf-8")
-
-        st.download_button(
-            "📥 Download Books Dataset",
-            csv,
-            "books_data.csv",
-            "text/csv"
-        )
-
-        st.success("Your dataset is ready to download.")
-
-    elif st.session_state["dataset"] is not None:
-
-        df = st.session_state["dataset"]
-
-        csv = df.to_csv(index=False).encode("utf-8")
-
-        st.download_button(
-            "📥 Download Dataset",
-            csv,
-            "dataset.csv",
-            "text/csv"
-        )
-
-    else:
-        st.info("No dataset available. Run Web Scraping first.")
-
-# SIDEBAR FOOTER
+# FOOTER
 st.sidebar.markdown("---")
-st.sidebar.caption("📚 BookLens")
-st.sidebar.caption("Developed using Python & Streamlit")
-st.sidebar.caption("CodeAlpha Data Analytics Internship")
+
+st.sidebar.write("----")
+
+st.sidebar.write("Develepod by Manasiga Murugesan")
+```
