@@ -1,3 +1,4 @@
+```python
 import streamlit as st
 import pandas as pd
 import requests
@@ -20,7 +21,6 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-
 .stApp {
     background: linear-gradient(135deg, #080d20, #11152e, #21133d);
     color: white;
@@ -85,7 +85,27 @@ p, label {
     padding: 22px;
     border-radius: 15px;
     border: 1px solid #38345f;
-    margin-bottom: 20px;
+    margin-bottom: 12px;
+    min-height: 115px;
+}
+
+.book-title {
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+    min-height: 55px;
+    margin-top: 10px;
+}
+
+.book-price {
+    color: #c4b5fd;
+    font-size: 19px;
+    font-weight: bold;
+}
+
+.book-rating {
+    color: #facc15;
+    font-size: 14px;
 }
 
 .stButton > button {
@@ -93,8 +113,9 @@ p, label {
     color: white;
     border: none;
     border-radius: 10px;
-    padding: 10px 25px;
+    padding: 10px 15px;
     font-weight: bold;
+    width: 100%;
 }
 
 .stButton > button:hover {
@@ -109,7 +130,6 @@ p, label {
     border-top: 1px solid #38345f;
     margin-top: 50px;
 }
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -119,8 +139,19 @@ p, label {
 if "books" not in st.session_state:
     st.session_state.books = pd.DataFrame()
 
+if "selected_page" not in st.session_state:
+    st.session_state.selected_page = "🏠 Home"
 
-# ---------------- SIDEBAR ----------------
+
+# ---------------- SIDEBAR NAVIGATION ----------------
+
+page_options = [
+    "🏠 Home",
+    "🌐 Web Scraping",
+    "🔍 Exploratory Data Analysis",
+    "📊 Data Visualization",
+    "💬 Sentiment Analysis"
+]
 
 st.sidebar.markdown("# 📚 BookLens")
 st.sidebar.caption("Book Data Analytics Platform")
@@ -128,20 +159,15 @@ st.sidebar.markdown("---")
 
 page = st.sidebar.radio(
     "NAVIGATION",
-    [
-        "🏠 Home",
-        "🌐 Web Scraping",
-        "🔍 Exploratory Data Analysis",
-        "📊 Data Visualization",
-        "💬 Sentiment Analysis"
-    ]
+    page_options,
+    key="selected_page"
 )
 
 st.sidebar.markdown("---")
 st.sidebar.info("Discover Books • Explore Data • Analyze Insights")
 
 
-# ---------------- HELPER FUNCTION ----------------
+# ---------------- HELPER FUNCTIONS ----------------
 
 def get_numeric_data(df):
     return df.select_dtypes(include="number")
@@ -169,6 +195,75 @@ def footer():
     """, unsafe_allow_html=True)
 
 
+def display_book_cards(df):
+
+    if df.empty:
+        st.info("No books available.")
+        return
+
+    st.subheader(f"📚 Book Collection ({len(df)} Books)")
+
+    for start in range(0, len(df), 4):
+
+        cols = st.columns(4)
+
+        for index, col in enumerate(cols):
+
+            row_index = start + index
+
+            if row_index >= len(df):
+                break
+
+            book = df.iloc[row_index]
+
+            with col:
+
+                with st.container(border=True):
+
+                    image_url = book.get("Image", "")
+
+                    if pd.notna(image_url) and str(image_url).startswith("http"):
+                        st.image(
+                            image_url,
+                            use_container_width=True
+                        )
+                    else:
+                        st.markdown(
+                            "<div style='height:220px;text-align:center;"
+                            "font-size:70px;padding-top:50px;'>📕</div>",
+                            unsafe_allow_html=True
+                        )
+
+                    title = str(book.get("Title", "Unknown Book"))
+
+                    st.markdown(
+                        f"<div class='book-title'>{title}</div>",
+                        unsafe_allow_html=True
+                    )
+
+                    price = book.get("Price", 0)
+
+                    if pd.notna(price):
+                        st.markdown(
+                            f"<div class='book-price'>£{float(price):.2f}</div>",
+                            unsafe_allow_html=True
+                        )
+
+                    rating = book.get("Rating", 0)
+
+                    st.markdown(
+                        f"<div class='book-rating'>⭐ {rating}/5</div>",
+                        unsafe_allow_html=True
+                    )
+
+                    availability = book.get(
+                        "Availability",
+                        "Not Available"
+                    )
+
+                    st.caption(f"🟢 {availability}")
+
+
 # ---------------- HOME ----------------
 
 if page == "🏠 Home":
@@ -186,42 +281,65 @@ if page == "🏠 Home":
     c1, c2 = st.columns(2)
 
     with c1:
+
         st.markdown("""
         <div class="section">
         <h3>🌐 Web Scraping</h3>
         Collect book information from online sources.
         </div>
+        """, unsafe_allow_html=True)
+
+        if st.button("Explore Web Scraping →"):
+            st.session_state.selected_page = "🌐 Web Scraping"
+            st.rerun()
+
+        st.markdown("""
         <div class="section">
         <h3>🔍 Exploratory Data Analysis</h3>
         Understand book data through statistical analysis.
         </div>
         """, unsafe_allow_html=True)
 
+        if st.button("Explore EDA →"):
+            st.session_state.selected_page = "🔍 Exploratory Data Analysis"
+            st.rerun()
+
     with c2:
+
         st.markdown("""
         <div class="section">
         <h3>📊 Data Visualization</h3>
         Explore patterns through charts and graphs.
         </div>
+        """, unsafe_allow_html=True)
+
+        if st.button("Explore Visualization →"):
+            st.session_state.selected_page = "📊 Data Visualization"
+            st.rerun()
+
+        st.markdown("""
         <div class="section">
         <h3>💬 Sentiment Analysis</h3>
-        Analyze text and identify positive, negative and neutral opinions.
+        Analyze positive, negative and neutral opinions.
         </div>
         """, unsafe_allow_html=True)
+
+        if st.button("Explore Sentiment Analysis →"):
+            st.session_state.selected_page = "💬 Sentiment Analysis"
+            st.rerun()
 
     st.markdown("---")
     st.subheader("📈 Book Collection Overview")
 
     if not st.session_state.books.empty:
-        df = st.session_state.books
-        n = len(df)
 
+        df = st.session_state.books
         numeric = get_numeric_data(df)
 
         m1, m2, m3 = st.columns(3)
 
         with m1:
-            metric_card("Total Books", f"{n:,}")
+            metric_card("Total Books", f"{len(df):,}")
 
         with m2:
             price = numeric["Price"].mean() if "Price" in numeric else 0
@@ -242,7 +360,7 @@ if page == "🏠 Home":
 elif page == "🌐 Web Scraping":
 
     st.title("🌐 Web Scraping")
-    st.write("Collect book information from Books to Scrape.")
+    st.write("Collect books with their cover images and details.")
 
     url = st.text_input(
         "Website URL",
@@ -261,7 +379,8 @@ elif page == "🌐 Web Scraping":
         books = []
 
         try:
-            with st.spinner("Collecting book information..."):
+
+            with st.spinner("Collecting books and cover images..."):
 
                 next_url = url
 
@@ -272,6 +391,7 @@ elif page == "🌐 Web Scraping":
                         timeout=20,
                         headers={"User-Agent": "Mozilla/5.0"}
                     )
+
                     response.raise_for_status()
 
                     soup = BeautifulSoup(
@@ -282,7 +402,11 @@ elif page == "🌐 Web Scraping":
                     for item in soup.select("article.product_pod"):
 
                         title = item.h3.a["title"]
-                        price = item.select_one(".price_color").text
+
+                        price = item.select_one(
+                            ".price_color"
+                        ).get_text(strip=True)
+
                         availability = item.select_one(
                             ".availability"
                         ).get_text(strip=True)
@@ -300,8 +424,21 @@ elif page == "🌐 Web Scraping":
                         }
 
                         rating = rating_map.get(
-                            rating_element["class"][1], 0
+                            rating_element["class"][1],
+                            0
                         )
+
+                        image_element = item.select_one(
+                            "div.image_container img"
+                        )
+
+                        image_url = ""
+
+                        if image_element and image_element.get("src"):
+                            image_url = urljoin(
+                                next_url,
+                                image_element["src"]
+                            )
 
                         books.append({
                             "Title": title,
@@ -309,7 +446,8 @@ elif page == "🌐 Web Scraping":
                                 price.replace("£", "").replace("Â", "")
                             ),
                             "Rating": rating,
-                            "Availability": availability
+                            "Availability": availability,
+                            "Image": image_url
                         })
 
                         if len(books) >= limit:
@@ -318,7 +456,10 @@ elif page == "🌐 Web Scraping":
                     next_button = soup.select_one("li.next a")
 
                     if next_button and len(books) < limit:
-                        next_url = urljoin(next_url, next_button["href"])
+                        next_url = urljoin(
+                            next_url,
+                            next_button["href"]
+                        )
                     else:
                         next_url = None
 
@@ -334,11 +475,12 @@ elif page == "🌐 Web Scraping":
 
         df = st.session_state.books
 
-        st.subheader("📚 Collected Book Data")
-        st.dataframe(df, use_container_width=True)
+        display_book_cards(df)
+
+        st.markdown("---")
 
         st.download_button(
-            "⬇️ Download CSV",
+            "⬇️ Download Book Dataset CSV",
             df.to_csv(index=False).encode("utf-8"),
             "books_data.csv",
             "text/csv"
@@ -361,9 +503,11 @@ elif page == "🔍 Exploratory Data Analysis":
     )
 
     if uploaded:
+
         try:
             st.session_state.books = pd.read_csv(uploaded)
             st.success("Dataset uploaded successfully!")
+
         except Exception as e:
             st.error(f"Unable to read CSV: {e}")
 
@@ -380,7 +524,10 @@ elif page == "🔍 Exploratory Data Analysis":
             metric_card("Total Columns", len(df.columns))
 
         with c:
-            metric_card("Missing Values", int(df.isnull().sum().sum()))
+            metric_card(
+                "Missing Values",
+                int(df.isnull().sum().sum())
+            )
 
         st.subheader("📋 Dataset Preview")
         st.dataframe(df.head(20), use_container_width=True)
@@ -398,8 +545,7 @@ elif page == "🔍 Exploratory Data Analysis":
             st.info("No numeric columns available.")
 
         st.subheader("🔎 Missing Values")
-        missing = df.isnull().sum()
-        st.bar_chart(missing)
+        st.bar_chart(df.isnull().sum())
 
         st.subheader("Duplicate Records")
         st.write(f"Total duplicates: {df.duplicated().sum()}")
@@ -526,3 +672,4 @@ elif page == "💬 Sentiment Analysis":
             st.warning("Please enter some text.")
 
     footer()
+```
