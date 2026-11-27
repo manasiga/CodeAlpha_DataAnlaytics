@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import requests
@@ -14,6 +15,13 @@ st.set_page_config(
 
 st.title("📊 CodeAlpha Data Analytics Internship")
 st.write("Welcome to my Data Analytics Project Portfolio!")
+
+# SESSION STATE
+if "books_data" not in st.session_state:
+    st.session_state["books_data"] = None
+
+if "dataset" not in st.session_state:
+    st.session_state["dataset"] = None
 
 # SIDEBAR
 st.sidebar.title("Navigation")
@@ -54,34 +62,64 @@ elif task == "Task 1 - Web Scraping":
 
     st.header("🌐 Web Scraping")
 
-    st.write("Collect book information from a website using Python.")
+    st.write("Collect book information using Python.")
 
-    pages = st.slider(pages = st.slider("Number of pages to scrape", 1, 50, 50))
+    pages = st.slider(
+        "Number of pages to scrape",
+        min_value=1,
+        max_value=50,
+        value=50
+    )
 
     if st.button("Start Web Scraping"):
 
         books = []
 
+        progress = st.progress(0)
+        status = st.empty()
+
         try:
             for page in range(1, pages + 1):
 
-                url = f"https://books.toscrape.com/catalogue/page-{page}.html"
+                url = (
+                    "https://books.toscrape.com/catalogue/"
+                    f"page-{page}.html"
+                )
 
-                response = requests.get(url, timeout=20)
+                response = requests.get(
+                    url,
+                    timeout=20,
+                    headers={"User-Agent": "Mozilla/5.0"}
+                )
+
                 response.raise_for_status()
 
-                soup = BeautifulSoup(response.text, "html.parser")
+                soup = BeautifulSoup(
+                    response.text,
+                    "html.parser"
+                )
 
-                for book in soup.select("article.product_pod"):
+                book_items = soup.select("article.product_pod")
+
+                for book in book_items:
 
                     title = book.h3.a["title"]
-                    price = book.select_one(".price_color").text
+
+                    price = book.select_one(
+                        ".price_color"
+                    ).get_text(strip=True)
+
                     availability = book.select_one(
                         ".availability"
                     ).get_text(strip=True)
 
-                    rating_element = book.select_one(".star-rating")
-                    rating = rating_element.get("class", [""])[1]
+                    rating_element = book.select_one(
+                        ".star-rating"
+                    )
+
+                    rating = (
+                        rating_element.get("class", ["", "Unknown"])[1]
+                    )
 
                     book_url = urljoin(
                         url,
@@ -96,23 +134,34 @@ elif task == "Task 1 - Web Scraping":
                         "URL": book_url
                     })
 
+                progress.progress(page / pages)
+                status.write(f"Scraping page {page} of {pages}")
+
             df = pd.DataFrame(books)
 
             st.session_state["books_data"] = df
             st.session_state["dataset"] = df
 
-            st.success(f"Successfully scraped {len(df)} books!")
+            st.success(
+                f"Successfully scraped {len(df)} books!"
+            )
+
+        except requests.RequestException as e:
+            st.error(f"Network error: {e}")
 
         except Exception as e:
             st.error(f"Scraping failed: {e}")
 
-    if "books_data" in st.session_state:
+    if st.session_state["books_data"] is not None:
 
         df = st.session_state["books_data"]
 
         st.subheader("Scraped Book Data")
 
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(
+            df,
+            use_container_width=True
+        )
 
         st.metric("Total Books", len(df))
 
@@ -142,6 +191,7 @@ elif task == "Task 2 - Exploratory Data Analysis":
 
         try:
             df = pd.read_csv(uploaded_file)
+
             st.session_state["dataset"] = df
 
             st.success("Dataset uploaded successfully!")
@@ -149,7 +199,7 @@ elif task == "Task 2 - Exploratory Data Analysis":
         except Exception as e:
             st.error(f"Unable to read CSV: {e}")
 
-    if "dataset" in st.session_state:
+    if st.session_state["dataset"] is not None:
 
         df = st.session_state["dataset"]
 
@@ -161,15 +211,20 @@ elif task == "Task 2 - Exploratory Data Analysis":
 
         col1.metric("Rows", df.shape[0])
         col2.metric("Columns", df.shape[1])
-        col3.metric("Missing Values", int(df.isnull().sum().sum()))
+        col3.metric(
+            "Missing Values",
+            int(df.isnull().sum().sum())
+        )
 
         st.subheader("Dataset Information")
 
-        st.write(df.dtypes)
+        st.write(df.dtypes.astype(str))
 
         st.subheader("Statistical Summary")
 
-        st.dataframe(df.describe(include="all"))
+        st.dataframe(
+            df.describe(include="all")
+        )
 
         st.subheader("Missing Values")
 
@@ -196,11 +251,13 @@ elif task == "Task 3 - Data Visualization":
 
         try:
             df = pd.read_csv(uploaded_file)
+
             st.session_state["dataset"] = df
+
         except Exception as e:
             st.error(f"Unable to read CSV: {e}")
 
-    if "dataset" in st.session_state:
+    if st.session_state["dataset"] is not None:
 
         df = st.session_state["dataset"]
 
@@ -223,13 +280,17 @@ elif task == "Task 3 - Data Visualization":
 
             fig, ax = plt.subplots()
 
-            ax.hist(df[column].dropna(), bins=15)
+            ax.hist(
+                df[column].dropna(),
+                bins=15
+            )
 
             ax.set_xlabel(column)
             ax.set_ylabel("Frequency")
             ax.set_title(f"Distribution of {column}")
 
             st.pyplot(fig)
+
             plt.close(fig)
 
             st.subheader("Correlation Matrix")
@@ -241,10 +302,14 @@ elif task == "Task 3 - Data Visualization":
                 st.dataframe(correlation)
 
             else:
-                st.info("At least two numeric columns are needed for correlation.")
+                st.info(
+                    "At least two numeric columns are needed."
+                )
 
         else:
-            st.warning("No numeric columns found in this dataset.")
+            st.warning(
+                "No numeric columns found in this dataset."
+            )
 
     else:
         st.info("Upload a CSV file or run Task 1 first.")
@@ -254,7 +319,9 @@ elif task == "Task 4 - Sentiment Analysis":
 
     st.header("💬 Sentiment Analysis")
 
-    st.write("Analyze text reviews and identify their sentiment.")
+    st.write(
+        "Analyze text reviews and identify their sentiment."
+    )
 
     positive_words = [
         "good", "great", "excellent", "amazing",
@@ -272,8 +339,15 @@ elif task == "Task 4 - Sentiment Analysis":
 
         words = text.lower().split()
 
-        positive = sum(word.strip(".,!?") in positive_words for word in words)
-        negative = sum(word.strip(".,!?") in negative_words for word in words)
+        positive = sum(
+            word.strip(".,!?") in positive_words
+            for word in words
+        )
+
+        negative = sum(
+            word.strip(".,!?") in negative_words
+            for word in words
+        )
 
         if positive > negative:
             return "Positive"
@@ -281,8 +355,7 @@ elif task == "Task 4 - Sentiment Analysis":
         elif negative > positive:
             return "Negative"
 
-        else:
-            return "Neutral"
+        return "Neutral"
 
     review = st.text_area(
         "Enter your review here:"
