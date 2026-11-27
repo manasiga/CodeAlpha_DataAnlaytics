@@ -1,4 +1,3 @@
-```python
 import streamlit as st
 import pandas as pd
 import requests
@@ -527,4 +526,3 @@ elif page == "💬 Sentiment Analysis":
             st.warning("Please enter some text.")
 
     footer()
-```
