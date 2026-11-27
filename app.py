@@ -2,433 +2,169 @@ import streamlit as st
 import pandas as pd
 import requests
 import matplotlib.pyplot as plt
-import re
-
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
-
-# --------------------------------------------------
 # PAGE CONFIGURATION
-# --------------------------------------------------
-
 st.set_page_config(
-    page_title="BookLens | Book Analytics",
+    page_title="BookLens",
     page_icon="📚",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
+# SESSION STATE
+if "books_data" not in st.session_state:
+    st.session_state["books_data"] = None
 
-# --------------------------------------------------
-# CUSTOM CSS - UI / UX DESIGN
-# --------------------------------------------------
+if "dataset" not in st.session_state:
+    st.session_state["dataset"] = None
 
+if "page" not in st.session_state:
+    st.session_state["page"] = "Home"
+
+# CUSTOM CSS
 st.markdown("""
 <style>
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
-html, body, [class*="css"] {
-    font-family: 'Inter', sans-serif;
-}
-
-.stApp {
-    background: linear-gradient(135deg, #080b18, #11152b, #17112e);
-    color: #ffffff;
-}
-
-/* Main container */
-
-.block-container {
-    padding-top: 2rem;
-    padding-bottom: 3rem;
-}
-
-/* Sidebar */
-
-section[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #11152b, #1b1535);
-    border-right: 1px solid #34305b;
-}
-
-section[data-testid="stSidebar"] h1 {
-    color: #c4a5ff;
-}
-
-/* Headings */
-
-h1, h2, h3 {
-    color: #ffffff !important;
-    font-weight: 700;
-}
-
-/* Paragraph */
-
-p, label, span {
-    color: #d0d2e5;
-}
-
-/* Buttons */
-
-.stButton > button {
-    background: linear-gradient(90deg, #8054e9, #b45cff);
-    color: white;
-    border: none;
-    border-radius: 10px;
-    padding: 0.65rem 1.5rem;
-    font-weight: 600;
-    transition: 0.3s;
-}
-
-.stButton > button:hover {
-    background: linear-gradient(90deg, #a276ff, #d17aff);
-    transform: translateY(-2px);
-}
-
-/* Metric Cards */
-
-[data-testid="stMetric"] {
-    background: linear-gradient(135deg, #20264a, #302052);
-    border: 1px solid #51417c;
-    padding: 20px;
-    border-radius: 15px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-}
-
-[data-testid="stMetricLabel"] {
-    color: #c4b5fd !important;
-}
-
-[data-testid="stMetricValue"] {
-    color: #ffffff !important;
-}
-
-/* Dataframe */
-
-[data-testid="stDataFrame"] {
-    border: 1px solid #51417c;
-    border-radius: 12px;
-}
-
-/* Input fields */
-
-.stTextInput input,
-.stNumberInput input {
-    background-color: #202443;
-    color: white;
-    border-radius: 8px;
-}
-
-/* Select boxes */
-
-.stSelectbox div[data-baseweb="select"] {
-    background-color: #202443;
-}
-
-/* File uploader */
-
-[data-testid="stFileUploader"] {
-    background: #1c2140;
-    border: 1px dashed #9569ff;
-    border-radius: 12px;
-    padding: 15px;
-}
-
-/* Custom cards */
-
-.custom-card {
-    background: linear-gradient(135deg, #20264a, #302052);
-    border: 1px solid #51417c;
-    border-radius: 16px;
-    padding: 22px;
-    margin-bottom: 15px;
-    min-height: 145px;
-}
-
-.custom-card h3 {
-    color: #c4a5ff !important;
-    font-size: 20px;
-}
-
-.custom-card p {
-    color: #d0d2e5;
-    font-size: 14px;
-}
-
-.hero {
-    background: linear-gradient(120deg, #39246c, #6639a5, #25204d);
-    border: 1px solid #8060c9;
-    border-radius: 22px;
-    padding: 45px 35px;
-    margin-bottom: 30px;
-}
-
-.hero h1 {
-    font-size: 43px;
-    color: white !important;
-}
-
-.hero p {
-    font-size: 17px;
-    color: #e5d9ff;
-}
-
-.footer {
+.main-title {
+    font-size: 42px;
+    font-weight: bold;
     text-align: center;
-    padding: 25px;
-    color: #9994bd;
-    border-top: 1px solid #34305b;
-    margin-top: 50px;
+    color: #6C63FF;
 }
-
+.subtitle {
+    text-align: center;
+    font-size: 18px;
+    color: gray;
+}
+div.stButton > button {
+    width: 100%;
+    height: 65px;
+    border-radius: 12px;
+    font-size: 17px;
+    font-weight: bold;
+}
 </style>
 """, unsafe_allow_html=True)
 
+# NAVIGATION
+pages = [
+    "Home",
+    "Task 1 - Web Scraping",
+    "Task 2 - Exploratory Data Analysis",
+    "Task 3 - Data Visualization",
+    "Task 4 - Sentiment Analysis",
+    "Data Export"
+]
 
-# --------------------------------------------------
-# COMMON FUNCTIONS
-# --------------------------------------------------
+st.sidebar.title("📚 BookLens")
+st.sidebar.markdown("---")
 
-def show_header(title, description):
-    st.markdown(f"## {title}")
-    st.markdown(f"<p>{description}</p>", unsafe_allow_html=True)
-    st.markdown("---")
+selected_page = st.sidebar.radio(
+    "Navigation",
+    pages,
+    index=pages.index(st.session_state["page"])
+)
 
+st.session_state["page"] = selected_page
 
-def load_uploaded_or_scraped_data(uploaded_file):
-    if uploaded_file is not None:
-        return pd.read_csv(uploaded_file)
-
-    if "books_data" in st.session_state:
-        return st.session_state["books_data"]
-
-    return None
-
-
-def prepare_numeric_columns(df):
-    numeric_df = df.copy()
-
-    for col in numeric_df.columns:
-        if numeric_df[col].dtype == "object":
-            cleaned = (
-                numeric_df[col]
-                .astype(str)
-                .str.replace(",", "", regex=False)
-                .str.replace(r"[£$€]", "", regex=True)
-                .str.strip()
-            )
-
-            converted = pd.to_numeric(cleaned, errors="coerce")
-
-            if converted.notna().any():
-                numeric_df[col] = converted
-
-    numeric_columns = numeric_df.select_dtypes(
-        include=["number"]
-    ).columns.tolist()
-
-    return numeric_df, numeric_columns
-
-
-# --------------------------------------------------
-# SIDEBAR
-# --------------------------------------------------
-
-with st.sidebar:
-
-    st.markdown("# 📚 BookLens")
-
-    st.markdown(
-        "<p style='color:#a9a2d0;'>Book Data Analytics Platform</p>",
-        unsafe_allow_html=True
-    )
-
-    st.markdown("---")
-
-    page = st.radio(
-        "NAVIGATION",
-        [
-            "🏠 Home",
-            "🌐 Web Scraping",
-            "🔍 Exploratory Data Analysis",
-            "📊 Data Visualization",
-            "💬 Sentiment Analysis"
-        ]
-    )
-
-    st.markdown("---")
-
-    st.markdown(
-        """
-        <div class="custom-card">
-            <h3>✨ BookLens</h3>
-            <p>Discover Books.<br>
-            Explore Data.<br>
-            Uncover Insights.</p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-# --------------------------------------------------
 # HOME PAGE
-# --------------------------------------------------
+if st.session_state["page"] == "Home":
 
-if page == "🏠 Home":
+    st.markdown(
+        '<p class="main-title">📚 BookLens</p>',
+        unsafe_allow_html=True
+    )
 
-    st.markdown("""
-    <div class="hero">
-        <h1>📚 Welcome to BookLens</h1>
-        <p>Discover Books. Explore Data. Uncover Insights.</p>
-        <p>
-        A smart book data analytics platform to collect,
-        explore and visualize book information.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        '<p class="subtitle">Discover Books • Explore Data • Gain Insights</p>',
+        unsafe_allow_html=True
+    )
 
-    st.markdown("## 🚀 Explore Your Platform")
+    st.markdown("---")
+
+    st.subheader("Welcome to BookLens!")
+
+    st.write(
+        "An interactive Book Data Analytics platform "
+        "to collect, analyze and visualize book information."
+    )
+
+    st.markdown("### Explore Our Features")
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.markdown("""
-        <div class="custom-card">
-            <h3>🌐 Web Scraping</h3>
-            <p>Collect book titles, prices, ratings
-            and availability from websites.</p>
-        </div>
-        """, unsafe_allow_html=True)
+        if st.button("🌐 Web Scraping"):
+            st.session_state["page"] = "Task 1 - Web Scraping"
+            st.rerun()
 
     with col2:
-        st.markdown("""
-        <div class="custom-card">
-            <h3>🔍 Data Analysis</h3>
-            <p>Understand datasets through
-            statistical analysis and insights.</p>
-        </div>
-        """, unsafe_allow_html=True)
+        if st.button("📈 Data Analysis"):
+            st.session_state["page"] = "Task 2 - Exploratory Data Analysis"
+            st.rerun()
 
     with col3:
-        st.markdown("""
-        <div class="custom-card">
-            <h3>📊 Visualization</h3>
-            <p>Transform numerical data into
-            meaningful charts and graphs.</p>
-        </div>
-        """, unsafe_allow_html=True)
+        if st.button("📊 Data Visualization"):
+            st.session_state["page"] = "Task 3 - Data Visualization"
+            st.rerun()
 
     col4, col5 = st.columns(2)
 
     with col4:
-        st.markdown("""
-        <div class="custom-card">
-            <h3>💬 Sentiment Analysis</h3>
-            <p>Analyze text and identify
-            positive, negative and neutral sentiment.</p>
-        </div>
-        """, unsafe_allow_html=True)
+        if st.button("💬 Sentiment Analysis"):
+            st.session_state["page"] = "Task 4 - Sentiment Analysis"
+            st.rerun()
 
     with col5:
-        st.markdown("""
-        <div class="custom-card">
-            <h3>📁 Data Export</h3>
-            <p>Download collected and analyzed
-            datasets in CSV format.</p>
-        </div>
-        """, unsafe_allow_html=True)
+        if st.button("📥 Data Export"):
+            st.session_state["page"] = "Data Export"
+            st.rerun()
 
     st.markdown("---")
 
-    st.markdown("## 📈 Your Dataset Overview")
-
-    if "books_data" in st.session_state:
-
-        df = st.session_state["books_data"]
-
-        c1, c2, c3 = st.columns(3)
-
-        c1.metric("Total Books", len(df))
-
-        if "Price" in df.columns:
-            c2.metric(
-                "Average Price",
-                f"£{df['Price'].mean():.2f}"
-            )
-
-        if "Rating" in df.columns:
-            c3.metric(
-                "Average Rating",
-                f"{df['Rating'].mean():.2f} / 5"
-            )
-
+    if st.session_state["books_data"] is not None:
+        st.success(
+            f"Dataset Available: {len(st.session_state['books_data'])} Books"
+        )
     else:
-        st.info("Go to Web Scraping to collect your book dataset.")
+        st.info("Start Web Scraping to collect book data.")
 
-
-# --------------------------------------------------
-# TASK 1 - WEB SCRAPING
-# --------------------------------------------------
-
-elif page == "🌐 Web Scraping":
-
-    show_header(
-        "🌐 Web Scraping",
-        "Collect book information from Books to Scrape website."
+    st.markdown(
+        "<center>Developed using Python, Streamlit and Data Analytics</center>",
+        unsafe_allow_html=True
     )
 
-    st.markdown("### ⚙️ Scraping Configuration")
+# TASK 1 - WEB SCRAPING
+elif st.session_state["page"] == "Task 1 - Web Scraping":
 
-    col1, col2 = st.columns(2)
+    st.header("🌐 Web Scraping")
 
-    with col1:
-        website_url = st.text_input(
-            "Website URL",
-            "https://books.toscrape.com/"
-        )
+    st.write("Collect book information using Python.")
 
-    with col2:
-        max_pages = st.number_input(
-            "Number of Pages",
-            min_value=1,
-            max_value=50,
-            value=50
-        )
+    pages_count = st.slider(
+        "Number of pages to scrape",
+        1, 50, 50
+    )
 
-    st.info("50 pages can contain up to 1000 books on this demo website.")
-
-    if st.button("🚀 Start Web Scraping"):
+    if st.button("Start Web Scraping"):
 
         books = []
-        current_url = website_url
+
         progress = st.progress(0)
         status = st.empty()
 
-        rating_map = {
-            "One": 1,
-            "Two": 2,
-            "Three": 3,
-            "Four": 4,
-            "Five": 5
-        }
-
         try:
+            for page in range(1, pages_count + 1):
 
-            for page_number in range(int(max_pages)):
-
-                status.write(
-                    f"Collecting page {page_number + 1} of {max_pages}..."
+                url = (
+                    "https://books.toscrape.com/catalogue/"
+                    f"page-{page}.html"
                 )
 
                 response = requests.get(
-                    current_url,
-                    headers={
-                        "User-Agent": "Mozilla/5.0"
-                    },
-                    timeout=20
+                    url,
+                    timeout=20,
+                    headers={"User-Agent": "Mozilla/5.0"}
                 )
 
                 response.raise_for_status()
@@ -440,405 +176,300 @@ elif page == "🌐 Web Scraping":
 
                 book_items = soup.select("article.product_pod")
 
-                if not book_items:
-                    break
+                for book in book_items:
 
-                for item in book_items:
+                    title = book.h3.a["title"]
 
-                    title = item.h3.a["title"]
-
-                    price_text = item.select_one(
+                    price = book.select_one(
                         ".price_color"
-                    ).text.strip()
+                    ).get_text(strip=True)
 
-                    price = float(
-                        re.sub(r"[^0-9.]", "", price_text)
+                    availability = book.select_one(
+                        ".availability"
+                    ).get_text(strip=True)
+
+                    rating_element = book.select_one(
+                        ".star-rating"
                     )
 
-                    availability = item.select_one(
-                        ".availability"
-                    ).text.strip()
+                    rating = rating_element.get("class", ["", "Unknown"])[1]
 
-                    rating_class = item.select_one(
-                        "p.star-rating"
-                    )["class"]
-
-                    rating_word = rating_class[1]
-
-                    rating = rating_map.get(
-                        rating_word, 0
+                    book_url = urljoin(
+                        url,
+                        book.h3.a["href"]
                     )
 
                     books.append({
                         "Title": title,
-                        "Price": price,
+                        "Price": float(price.replace("£", "").replace("Â", "")),
                         "Availability": availability,
-                        "Rating": rating
+                        "Rating": rating,
+                        "URL": book_url
                     })
 
-                next_button = soup.select_one("li.next a")
+                progress.progress(page / pages_count)
+                status.write(f"Scraping page {page} of {pages_count}")
 
-                if next_button is None:
-                    break
+            df = pd.DataFrame(books)
 
-                current_url = urljoin(
-                    current_url,
-                    next_button["href"]
-                )
+            st.session_state["books_data"] = df
+            st.session_state["dataset"] = df
 
-                progress.progress(
-                    (page_number + 1) / int(max_pages)
-                )
+            st.success(f"Successfully scraped {len(df)} books!")
 
-            progress.progress(1.0)
-            status.success("Scraping completed successfully!")
-
-            if books:
-
-                df = pd.DataFrame(books)
-
-                st.session_state["books_data"] = df
-
-                st.success(
-                    f"Successfully collected {len(df)} books!"
-                )
-
-            else:
-                st.warning("No books were collected. Check the website URL.")
+        except requests.RequestException as e:
+            st.error(f"Network error: {e}")
 
         except Exception as e:
+            st.error(f"Scraping failed: {e}")
 
-            st.error(f"Scraping Error: {e}")
-
-    if "books_data" in st.session_state:
+    if st.session_state["books_data"] is not None:
 
         df = st.session_state["books_data"]
 
-        st.markdown("---")
-        st.markdown("## 📚 Scraped Book Dataset")
+        st.subheader("Scraped Book Data")
 
-        c1, c2, c3 = st.columns(3)
+        st.dataframe(df, use_container_width=True)
 
-        c1.metric("Total Books", len(df))
+        st.metric("Total Books", len(df))
 
-        c2.metric(
-            "Average Price",
-            f"£{df['Price'].mean():.2f}"
-        )
-
-        c3.metric(
-            "Average Rating",
-            f"{df['Rating'].mean():.2f} / 5"
-        )
-
-        st.dataframe(
-            df,
-            use_container_width=True,
-            height=350
-        )
+        csv = df.to_csv(index=False).encode("utf-8")
 
         st.download_button(
-            "⬇️ Download Books Dataset",
-            data=df.to_csv(index=False).encode("utf-8"),
-            file_name="books_data.csv",
-            mime="text/csv"
+            "📥 Download CSV",
+            csv,
+            "books_data.csv",
+            "text/csv"
         )
 
+# TASK 2 - EDA
+elif st.session_state["page"] == "Task 2 - Exploratory Data Analysis":
 
-# --------------------------------------------------
-# TASK 2 - EXPLORATORY DATA ANALYSIS
-# --------------------------------------------------
+    st.header("📈 Exploratory Data Analysis")
 
-elif page == "🔍 Exploratory Data Analysis":
-
-    show_header(
-        "🔍 Exploratory Data Analysis",
-        "Explore the structure, quality and statistics of your book dataset."
-    )
+    st.write("Analyze your book dataset.")
 
     uploaded_file = st.file_uploader(
-        "Upload your CSV dataset (optional)",
+        "Upload your CSV dataset (Optional)",
         type=["csv"],
         key="eda_upload"
     )
 
-    df = load_uploaded_or_scraped_data(uploaded_file)
+    if uploaded_file:
+        try:
+            df = pd.read_csv(uploaded_file)
+            st.session_state["dataset"] = df
+            st.success("Dataset uploaded successfully!")
 
-    if df is not None:
+        except Exception as e:
+            st.error(f"Unable to read CSV: {e}")
 
-        st.markdown("### 📋 Dataset Preview")
+    if st.session_state["dataset"] is not None:
 
-        st.dataframe(
-            df.head(10),
-            use_container_width=True
-        )
+        df = st.session_state["dataset"]
 
-        st.markdown("### 📊 Dataset Summary")
+        st.subheader("Dataset Preview")
+        st.dataframe(df.head(10), use_container_width=True)
 
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3 = st.columns(3)
 
         col1.metric("Total Rows", df.shape[0])
         col2.metric("Total Columns", df.shape[1])
-        col3.metric("Missing Values", int(df.isnull().sum().sum()))
-        col4.metric("Duplicate Rows", int(df.duplicated().sum()))
+        col3.metric(
+            "Missing Values",
+            int(df.isnull().sum().sum())
+        )
 
-        st.markdown("---")
-
-        st.markdown("### 📈 Statistical Summary")
-
+        st.subheader("Dataset Information")
         st.dataframe(
-            df.describe(include="all").T,
-            use_container_width=True
+            pd.DataFrame({
+                "Column": df.columns,
+                "Data Type": df.dtypes.astype(str)
+            })
         )
 
-        st.markdown("### 🧹 Missing Values Analysis")
+        st.subheader("Statistical Summary")
+        st.dataframe(df.describe(include="all"))
 
-        missing_data = df.isnull().sum()
+        st.subheader("Missing Values")
+        st.dataframe(df.isnull().sum().to_frame("Missing Count"))
 
-        if missing_data.sum() > 0:
-
-            st.bar_chart(missing_data)
-
-        else:
-
-            st.success("Great! No missing values found.")
-
-        st.markdown("### 🔁 Duplicate Records")
-
-        st.write(
-            f"Duplicate records: {df.duplicated().sum()}"
-        )
+        st.subheader("Duplicate Rows")
+        st.write(int(df.duplicated().sum()))
 
     else:
+        st.info("Run Web Scraping first or upload a CSV dataset.")
 
-        st.warning(
-            "Upload a CSV file or first collect books using Web Scraping."
-        )
-
-
-# --------------------------------------------------
 # TASK 3 - DATA VISUALIZATION
-# --------------------------------------------------
+elif st.session_state["page"] == "Task 3 - Data Visualization":
 
-elif page == "📊 Data Visualization":
+    st.header("📊 Data Visualization")
 
-    show_header(
-        "📊 Data Visualization",
-        "Create meaningful charts and understand your book data."
-    )
+    st.write("Create charts and graphs from your book dataset.")
 
     uploaded_file = st.file_uploader(
-        "Upload CSV dataset (optional)",
+        "Upload your CSV dataset (Optional)",
         type=["csv"],
         key="visual_upload"
     )
 
-    df = load_uploaded_or_scraped_data(uploaded_file)
+    if uploaded_file:
+        try:
+            df = pd.read_csv(uploaded_file)
+            st.session_state["dataset"] = df
 
-    if df is not None:
+        except Exception as e:
+            st.error(f"Unable to read CSV: {e}")
 
-        numeric_df, numeric_columns = prepare_numeric_columns(df)
+    if st.session_state["dataset"] is not None:
 
-        st.markdown("### 📁 Dataset Preview")
+        df = st.session_state["dataset"]
 
-        st.dataframe(
-            df.head(10),
-            use_container_width=True
-        )
+        numeric_columns = df.select_dtypes(
+            include="number"
+        ).columns.tolist()
 
         if numeric_columns:
 
-            st.markdown("### 📊 Chart Configuration")
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-
-                selected_column = st.selectbox(
-                    "Select Numeric Column",
-                    numeric_columns
-                )
-
-            with col2:
-
-                chart_type = st.selectbox(
-                    "Select Chart Type",
-                    [
-                        "Bar Chart",
-                        "Line Chart",
-                        "Histogram"
-                    ]
-                )
-
-            if chart_type == "Bar Chart":
-
-                chart_data = numeric_df[
-                    selected_column
-                ].value_counts().sort_index()
-
-                st.bar_chart(chart_data)
-
-            elif chart_type == "Line Chart":
-
-                st.line_chart(
-                    numeric_df[selected_column]
-                )
-
-            elif chart_type == "Histogram":
-
-                fig, ax = plt.subplots(figsize=(10, 5))
-
-                ax.hist(
-                    numeric_df[selected_column].dropna(),
-                    bins=15,
-                    edgecolor="black"
-                )
-
-                ax.set_title(
-                    f"Distribution of {selected_column}"
-                )
-
-                ax.set_xlabel(selected_column)
-                ax.set_ylabel("Frequency")
-
-                st.pyplot(fig)
-
-            st.success(
-                f"Visualization generated using {selected_column}."
+            column = st.selectbox(
+                "Select a column",
+                numeric_columns
             )
+
+            st.subheader("Bar Chart")
+            st.bar_chart(df[column])
+
+            st.subheader("Histogram")
+
+            fig, ax = plt.subplots()
+
+            ax.hist(df[column].dropna(), bins=15)
+
+            ax.set_xlabel(column)
+            ax.set_ylabel("Frequency")
+            ax.set_title(f"Distribution of {column}")
+
+            st.pyplot(fig)
+            plt.close(fig)
+
+            st.subheader("Correlation Matrix")
+
+            if len(numeric_columns) > 1:
+                st.dataframe(df[numeric_columns].corr())
+            else:
+                st.info("At least two numeric columns are needed.")
 
         else:
-
-            st.warning(
-                "No numeric columns found. Please upload a dataset containing numerical values."
-            )
+            st.warning("No numeric columns found.")
 
     else:
+        st.info("Run Web Scraping first or upload a CSV dataset.")
 
-        st.warning(
-            "Upload a CSV file or first collect books using Web Scraping."
-        )
-
-
-# --------------------------------------------------
 # TASK 4 - SENTIMENT ANALYSIS
-# --------------------------------------------------
+elif st.session_state["page"] == "Task 4 - Sentiment Analysis":
 
-elif page == "💬 Sentiment Analysis":
+    st.header("💬 Sentiment Analysis")
 
-    show_header(
-        "💬 Sentiment Analysis",
-        "Analyze text and identify positive, negative and neutral opinions."
-    )
+    st.write("Analyze text reviews and identify their sentiment.")
 
-    uploaded_file = st.file_uploader(
-        "Upload CSV file containing text",
-        type=["csv"],
-        key="sentiment_upload"
-    )
+    positive_words = [
+        "good", "great", "excellent", "amazing",
+        "happy", "love", "wonderful", "best",
+        "awesome", "fantastic", "nice"
+    ]
 
-    if uploaded_file is not None:
+    negative_words = [
+        "bad", "worst", "poor", "terrible",
+        "hate", "awful", "disappointed",
+        "boring", "sad", "waste"
+    ]
 
-        df = pd.read_csv(uploaded_file)
+    def analyze_sentiment(text):
 
-        st.markdown("### 📋 Dataset Preview")
+        words = text.lower().split()
 
-        st.dataframe(
-            df.head(),
-            use_container_width=True
+        positive = sum(
+            word.strip(".,!?") in positive_words
+            for word in words
         )
 
-        text_columns = df.select_dtypes(
-            include=["object"]
-        ).columns.tolist()
+        negative = sum(
+            word.strip(".,!?") in negative_words
+            for word in words
+        )
 
-        if text_columns:
+        if positive > negative:
+            return "Positive"
 
-            selected_column = st.selectbox(
-                "Select Text Column",
-                text_columns
-            )
+        elif negative > positive:
+            return "Negative"
 
-            if st.button("🔍 Analyze Sentiment"):
+        return "Neutral"
 
-                analyzer = SentimentIntensityAnalyzer()
+    review = st.text_area("Enter your review here:")
 
-                def analyze_sentiment(text):
+    if st.button("Analyze Sentiment"):
 
-                    score = analyzer.polarity_scores(
-                        str(text)
-                    )["compound"]
+        if review.strip():
 
-                    if score >= 0.05:
-                        return "Positive"
+            result = analyze_sentiment(review)
 
-                    elif score <= -0.05:
-                        return "Negative"
+            if result == "Positive":
+                st.success("😊 Positive Sentiment")
 
-                    else:
-                        return "Neutral"
+            elif result == "Negative":
+                st.error("😞 Negative Sentiment")
 
-                df["Sentiment"] = df[
-                    selected_column
-                ].apply(analyze_sentiment)
+            else:
+                st.info("😐 Neutral Sentiment")
 
-                st.session_state["sentiment_data"] = df
-
-                st.success("Sentiment analysis completed!")
+            st.write("Result:", result)
 
         else:
+            st.warning("Please enter a review.")
 
-            st.warning("No text columns found in this dataset.")
+# DATA EXPORT
+elif st.session_state["page"] == "Data Export":
 
-    if "sentiment_data" in st.session_state:
+    st.header("📥 Data Export")
 
-        result_df = st.session_state["sentiment_data"]
+    st.write("Download your collected book dataset.")
 
-        st.markdown("---")
-        st.markdown("## 📊 Sentiment Results")
+    if st.session_state["books_data"] is not None:
 
-        sentiment_counts = result_df[
-            "Sentiment"
-        ].value_counts()
+        df = st.session_state["books_data"]
 
-        positive = sentiment_counts.get("Positive", 0)
-        negative = sentiment_counts.get("Negative", 0)
-        neutral = sentiment_counts.get("Neutral", 0)
+        st.dataframe(df, use_container_width=True)
 
-        c1, c2, c3 = st.columns(3)
-
-        c1.metric("😊 Positive", positive)
-        c2.metric("😞 Negative", negative)
-        c3.metric("😐 Neutral", neutral)
-
-        st.markdown("### Sentiment Distribution")
-
-        st.bar_chart(sentiment_counts)
-
-        st.markdown("### 📋 Analysis Results")
-
-        st.dataframe(
-            result_df,
-            use_container_width=True
-        )
+        csv = df.to_csv(index=False).encode("utf-8")
 
         st.download_button(
-            "⬇️ Download Sentiment Results",
-            data=result_df.to_csv(index=False).encode("utf-8"),
-            file_name="sentiment_analysis.csv",
-            mime="text/csv"
+            "📥 Download Books Dataset",
+            csv,
+            "books_data.csv",
+            "text/csv"
         )
 
+        st.success("Your dataset is ready to download.")
 
-# --------------------------------------------------
-# FOOTER
-# --------------------------------------------------
+    elif st.session_state["dataset"] is not None:
 
-st.markdown("""
-<div class="footer">
-    <h3>📚 BookLens</h3>
-    <p>Book Data Analytics & Visualization Platform</p>
-    <p>Developed with Python and Streamlit</p>
-    <p>© 2026 BookLens | All Rights Reserved</p>
-</div>
-""", unsafe_allow_html=True)
+        df = st.session_state["dataset"]
+
+        csv = df.to_csv(index=False).encode("utf-8")
+
+        st.download_button(
+            "📥 Download Dataset",
+            csv,
+            "dataset.csv",
+            "text/csv"
+        )
+
+    else:
+        st.info("No dataset available. Run Web Scraping first.")
+
+# SIDEBAR FOOTER
+st.sidebar.markdown("---")
+st.sidebar.caption("📚 BookLens")
+st.sidebar.caption("Developed using Python & Streamlit")
+st.sidebar.caption("CodeAlpha Data Analytics Internship")
