@@ -1,5 +1,11 @@
 import streamlit as st
+import pandas as pd
+import requests
+import matplotlib.pyplot as plt
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 
+# PAGE CONFIGURATION
 st.set_page_config(
     page_title="CodeAlpha Data Analytics",
     page_icon="📊",
@@ -7,8 +13,9 @@ st.set_page_config(
 )
 
 st.title("📊 CodeAlpha Data Analytics Internship")
-st.write("Welcome to my Data Analytics project portfolio!")
+st.write("Welcome to my Data Analytics Project Portfolio!")
 
+# SIDEBAR
 st.sidebar.title("Navigation")
 
 task = st.sidebar.radio(
@@ -22,35 +29,288 @@ task = st.sidebar.radio(
     ]
 )
 
+# HOME
 if task == "Home":
+
     st.header("Data Analytics Projects")
-    st.write("This website contains all four tasks completed during my internship.")
+
+    st.write(
+        "This website contains all four tasks "
+        "completed during my Data Analytics Internship."
+    )
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.info("🌐 Task 1: Web Scraping")
-        st.info("📈 Task 2: Exploratory Data Analysis")
+        st.info("🌐 Task 1 - Web Scraping")
+        st.info("📈 Task 2 - Exploratory Data Analysis")
 
     with col2:
-        st.info("📊 Task 3: Data Visualization")
-        st.info("💬 Task 4: Sentiment Analysis")
+        st.info("📊 Task 3 - Data Visualization")
+        st.info("💬 Task 4 - Sentiment Analysis")
 
+# TASK 1 - WEB SCRAPING
 elif task == "Task 1 - Web Scraping":
+
     st.header("🌐 Web Scraping")
-    st.write("Collecting data from websites using Python.")
 
+    st.write("Collect book information from a website using Python.")
+
+    pages = st.slider("Number of pages to scrape", 1, 5, 2)
+
+    if st.button("Start Web Scraping"):
+
+        books = []
+
+        try:
+            for page in range(1, pages + 1):
+
+                url = f"https://books.toscrape.com/catalogue/page-{page}.html"
+
+                response = requests.get(url, timeout=20)
+                response.raise_for_status()
+
+                soup = BeautifulSoup(response.text, "html.parser")
+
+                for book in soup.select("article.product_pod"):
+
+                    title = book.h3.a["title"]
+                    price = book.select_one(".price_color").text
+                    availability = book.select_one(
+                        ".availability"
+                    ).get_text(strip=True)
+
+                    rating_element = book.select_one(".star-rating")
+                    rating = rating_element.get("class", [""])[1]
+
+                    book_url = urljoin(
+                        url,
+                        book.h3.a["href"]
+                    )
+
+                    books.append({
+                        "Title": title,
+                        "Price": price,
+                        "Availability": availability,
+                        "Rating": rating,
+                        "URL": book_url
+                    })
+
+            df = pd.DataFrame(books)
+
+            st.session_state["books_data"] = df
+            st.session_state["dataset"] = df
+
+            st.success(f"Successfully scraped {len(df)} books!")
+
+        except Exception as e:
+            st.error(f"Scraping failed: {e}")
+
+    if "books_data" in st.session_state:
+
+        df = st.session_state["books_data"]
+
+        st.subheader("Scraped Book Data")
+
+        st.dataframe(df, use_container_width=True)
+
+        st.metric("Total Books", len(df))
+
+        csv = df.to_csv(index=False).encode("utf-8")
+
+        st.download_button(
+            "Download CSV",
+            csv,
+            "books_data.csv",
+            "text/csv"
+        )
+
+# TASK 2 - EDA
 elif task == "Task 2 - Exploratory Data Analysis":
+
     st.header("📈 Exploratory Data Analysis")
-    st.write("Analyzing and understanding datasets using Python.")
 
+    st.write("Upload a CSV file to analyze your dataset.")
+
+    uploaded_file = st.file_uploader(
+        "Upload CSV File",
+        type=["csv"],
+        key="eda_upload"
+    )
+
+    if uploaded_file:
+
+        try:
+            df = pd.read_csv(uploaded_file)
+            st.session_state["dataset"] = df
+
+            st.success("Dataset uploaded successfully!")
+
+        except Exception as e:
+            st.error(f"Unable to read CSV: {e}")
+
+    if "dataset" in st.session_state:
+
+        df = st.session_state["dataset"]
+
+        st.subheader("Dataset Preview")
+
+        st.dataframe(df.head(10))
+
+        col1, col2, col3 = st.columns(3)
+
+        col1.metric("Rows", df.shape[0])
+        col2.metric("Columns", df.shape[1])
+        col3.metric("Missing Values", int(df.isnull().sum().sum()))
+
+        st.subheader("Dataset Information")
+
+        st.write(df.dtypes)
+
+        st.subheader("Statistical Summary")
+
+        st.dataframe(df.describe(include="all"))
+
+        st.subheader("Missing Values")
+
+        st.dataframe(df.isnull().sum())
+
+        st.subheader("Duplicate Rows")
+
+        st.write(int(df.duplicated().sum()))
+
+# TASK 3 - DATA VISUALIZATION
 elif task == "Task 3 - Data Visualization":
+
     st.header("📊 Data Visualization")
-    st.write("Presenting data through charts and graphs.")
 
+    st.write("Create charts and graphs from your dataset.")
+
+    uploaded_file = st.file_uploader(
+        "Upload CSV File",
+        type=["csv"],
+        key="visual_upload"
+    )
+
+    if uploaded_file:
+
+        try:
+            df = pd.read_csv(uploaded_file)
+            st.session_state["dataset"] = df
+        except Exception as e:
+            st.error(f"Unable to read CSV: {e}")
+
+    if "dataset" in st.session_state:
+
+        df = st.session_state["dataset"]
+
+        numeric_columns = df.select_dtypes(
+            include="number"
+        ).columns.tolist()
+
+        if numeric_columns:
+
+            column = st.selectbox(
+                "Select a column",
+                numeric_columns
+            )
+
+            st.subheader("Bar Chart")
+
+            st.bar_chart(df[column])
+
+            st.subheader("Histogram")
+
+            fig, ax = plt.subplots()
+
+            ax.hist(df[column].dropna(), bins=15)
+
+            ax.set_xlabel(column)
+            ax.set_ylabel("Frequency")
+            ax.set_title(f"Distribution of {column}")
+
+            st.pyplot(fig)
+            plt.close(fig)
+
+            st.subheader("Correlation Matrix")
+
+            if len(numeric_columns) > 1:
+
+                correlation = df[numeric_columns].corr()
+
+                st.dataframe(correlation)
+
+            else:
+                st.info("At least two numeric columns are needed for correlation.")
+
+        else:
+            st.warning("No numeric columns found in this dataset.")
+
+    else:
+        st.info("Upload a CSV file or run Task 1 first.")
+
+# TASK 4 - SENTIMENT ANALYSIS
 elif task == "Task 4 - Sentiment Analysis":
-    st.header("💬 Sentiment Analysis")
-    st.write("Analyzing text data to identify positive and negative sentiments.")
 
+    st.header("💬 Sentiment Analysis")
+
+    st.write("Analyze text reviews and identify their sentiment.")
+
+    positive_words = [
+        "good", "great", "excellent", "amazing",
+        "happy", "love", "wonderful", "best",
+        "awesome", "fantastic", "nice"
+    ]
+
+    negative_words = [
+        "bad", "worst", "poor", "terrible",
+        "hate", "awful", "disappointed",
+        "boring", "sad", "waste"
+    ]
+
+    def analyze_sentiment(text):
+
+        words = text.lower().split()
+
+        positive = sum(word.strip(".,!?") in positive_words for word in words)
+        negative = sum(word.strip(".,!?") in negative_words for word in words)
+
+        if positive > negative:
+            return "Positive"
+
+        elif negative > positive:
+            return "Negative"
+
+        else:
+            return "Neutral"
+
+    review = st.text_area(
+        "Enter your review here:"
+    )
+
+    if st.button("Analyze Sentiment"):
+
+        if review.strip():
+
+            result = analyze_sentiment(review)
+
+            if result == "Positive":
+                st.success("😊 Positive Sentiment")
+
+            elif result == "Negative":
+                st.error("😞 Negative Sentiment")
+
+            else:
+                st.info("😐 Neutral Sentiment")
+
+            st.write("Result:", result)
+
+        else:
+            st.warning("Please enter a review.")
+
+# FOOTER
 st.sidebar.markdown("---")
+
 st.sidebar.write("Created for CodeAlpha Internship")
+
+st.sidebar.write("Developed using Python and Streamlit")
