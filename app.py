@@ -35,7 +35,7 @@ st.markdown("""
 }
 
 h1, h2, h3 {
-    color: #ffffff !important;
+    color: white !important;
 }
 
 p, label {
@@ -52,7 +52,6 @@ p, label {
 
 .hero h1 {
     font-size: 48px;
-    color: white;
 }
 
 .hero p {
@@ -76,7 +75,6 @@ p, label {
 
 .card h1 {
     font-size: 35px;
-    color: white !important;
 }
 
 .section {
@@ -142,7 +140,13 @@ if "selected_page" not in st.session_state:
     st.session_state.selected_page = "🏠 Home"
 
 
-# ---------------- SIDEBAR NAVIGATION ----------------
+# ---------------- NAVIGATION CALLBACK ----------------
+
+def navigate_to(page_name):
+    st.session_state.selected_page = page_name
+
+
+# ---------------- SIDEBAR ----------------
 
 page_options = [
     "🏠 Home",
@@ -288,9 +292,13 @@ if page == "🏠 Home":
         </div>
         """, unsafe_allow_html=True)
 
-        if st.button("Explore Web Scraping →"):
-            st.session_state.selected_page = "🌐 Web Scraping"
-            st.rerun()
+        st.button(
+            "Explore Web Scraping →",
+            key="web_btn",
+            on_click=navigate_to,
+            args=("🌐 Web Scraping",),
+            use_container_width=True
+        )
 
         st.markdown("""
         <div class="section">
@@ -299,9 +307,13 @@ if page == "🏠 Home":
         </div>
         """, unsafe_allow_html=True)
 
-        if st.button("Explore EDA →"):
-            st.session_state.selected_page = "🔍 Exploratory Data Analysis"
-            st.rerun()
+        st.button(
+            "Explore EDA →",
+            key="eda_btn",
+            on_click=navigate_to,
+            args=("🔍 Exploratory Data Analysis",),
+            use_container_width=True
+        )
 
     with c2:
 
@@ -312,9 +324,13 @@ if page == "🏠 Home":
         </div>
         """, unsafe_allow_html=True)
 
-        if st.button("Explore Visualization →"):
-            st.session_state.selected_page = "📊 Data Visualization"
-            st.rerun()
+        st.button(
+            "Explore Visualization →",
+            key="visual_btn",
+            on_click=navigate_to,
+            args=("📊 Data Visualization",),
+            use_container_width=True
+        )
 
         st.markdown("""
         <div class="section">
@@ -323,9 +339,13 @@ if page == "🏠 Home":
         </div>
         """, unsafe_allow_html=True)
 
-        if st.button("Explore Sentiment Analysis →"):
-            st.session_state.selected_page = "💬 Sentiment Analysis"
-            st.rerun()
+        st.button(
+            "Explore Sentiment Analysis →",
+            key="sentiment_btn",
+            on_click=navigate_to,
+            args=("💬 Sentiment Analysis",),
+            use_container_width=True
+        )
 
     st.markdown("---")
     st.subheader("📈 Book Collection Overview")
